@@ -11,7 +11,7 @@ struct ConvenienceConfig {
   bool reverseHazard=false, reverseFog=false;
   uint8_t kickOnPct=90, kickOffPct=10;
   // UI_windowPercentageRequest: signed six-bit raw, scale 5.
-  // Production protocol remains locked independently of this known encoding.
+  // Automatic transmission is controlled by the default-OFF easyEntry toggle.
   uint8_t windowDropRaw=20;
   // 0: pedal release, 1: brake release, 2: either. A brake always inhibits TX.
   uint8_t kickReleaseMode=2;

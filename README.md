@@ -237,6 +237,8 @@ This Universal release is based on source-level comparison and consolidation of:
 
 ## Pre-release convenience integration
 
+[261029 Convenience — 한국어 추가 기능 및 펌웨어 안내](README_261029_convenience.md)
+
 Juniper convenience controls, configurable steering macros and the shared S3XY
 action registry are described in [the integration review](docs/convenience-port-review.md).
 Easy Entry defaults OFF and can be enabled in Settings → Convenience & Macros.
