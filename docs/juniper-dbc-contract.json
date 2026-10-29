@@ -1,0 +1,974 @@
+{
+  "sources": {
+    "Bayberry_VEH.dbc": "bee2b42ff573136494f79b1a0f52f579a46d44bf5d8331efef166b54e31bad29",
+    "Bayberry_PARTY.dbc": "eb954704bed42d4768698f31c98f1a72bb1e1b11052a358b9f65d9d807453747",
+    "Bayberry_CH.dbc": "883dbb50eed9a4c3a25cf40462dc0036d02a78229fe50f078f8911f130228f22"
+  },
+  "verified_fields": [
+    {
+      "bus": "VEH",
+      "id": "0x118",
+      "signal": "DI_gear",
+      "definition": [
+        21,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x118",
+      "signal": "DI_accelPedalPos",
+      "definition": [
+        32,
+        8,
+        1,
+        "+",
+        0.4,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x257",
+      "signal": "DI_uiSpeed",
+      "definition": [
+        24,
+        9,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x257",
+      "signal": "DI_uiSpeedUnits",
+      "definition": [
+        33,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngle",
+      "definition": [
+        16,
+        14,
+        1,
+        "+",
+        0.1,
+        -819.2,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngleValidity",
+      "definition": [
+        30,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngleSensorStatus",
+      "definition": [
+        14,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x39d",
+      "signal": "IBST_driverBrakeApply",
+      "definition": [
+        16,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x118",
+      "signal": "DI_gear",
+      "definition": [
+        21,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x118",
+      "signal": "DI_accelPedalPos",
+      "definition": [
+        32,
+        8,
+        1,
+        "+",
+        0.4,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x257",
+      "signal": "DI_uiSpeed",
+      "definition": [
+        24,
+        9,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x257",
+      "signal": "DI_uiSpeedUnits",
+      "definition": [
+        33,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngle",
+      "definition": [
+        16,
+        14,
+        1,
+        "+",
+        0.1,
+        -819.2,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngleValidity",
+      "definition": [
+        30,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngleSensorStatus",
+      "definition": [
+        14,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
+      "id": "0x39d",
+      "signal": "IBST_driverBrakeApply",
+      "definition": [
+        16,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x118",
+      "signal": "DI_gear",
+      "definition": [
+        21,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x118",
+      "signal": "DI_accelPedalPos",
+      "definition": [
+        32,
+        8,
+        1,
+        "+",
+        0.4,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x257",
+      "signal": "DI_uiSpeed",
+      "definition": [
+        24,
+        9,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x257",
+      "signal": "DI_uiSpeedUnits",
+      "definition": [
+        33,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngle",
+      "definition": [
+        16,
+        14,
+        1,
+        "+",
+        0.1,
+        -819.2,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngleValidity",
+      "definition": [
+        30,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x129",
+      "signal": "SCCM_steeringAngleSensorStatus",
+      "definition": [
+        14,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x39d",
+      "signal": "IBST_driverBrakeApply",
+      "definition": [
+        16,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x334",
+      "signal": "UI_pedalMap",
+      "definition": [
+        5,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x334",
+      "signal": "UI_powertrainControlCounter",
+      "definition": [
+        52,
+        4,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x334",
+      "signal": "UI_powertrainControlChecksum",
+      "definition": [
+        56,
+        8,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorLeftInternal",
+      "definition": [
+        50,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorRightInternal",
+      "definition": [
+        52,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x334",
+      "signal": "UI_pedalMap",
+      "definition": [
+        5,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x334",
+      "signal": "UI_powertrainControlCounter",
+      "definition": [
+        52,
+        4,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x334",
+      "signal": "UI_powertrainControlChecksum",
+      "definition": [
+        56,
+        8,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorLeftInternal",
+      "definition": [
+        50,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorRightInternal",
+      "definition": [
+        52,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_windowPercentageRequest",
+      "definition": [
+        42,
+        6,
+        1,
+        "-",
+        5.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_windowRequest",
+      "definition": [
+        52,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_windowRequestedFL",
+      "definition": [
+        48,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_windowRequestedFR",
+      "definition": [
+        49,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_windowRequestedRL",
+      "definition": [
+        50,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_windowRequestedRR",
+      "definition": [
+        51,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x2c2",
+      "signal": "VCLEFT_windowPositionStateLF",
+      "definition": [
+        49,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x2c2",
+      "signal": "VCLEFT_windowPositionStateLR",
+      "definition": [
+        52,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x2c3",
+      "signal": "VCRIGHT_windowPositionStateRF",
+      "definition": [
+        49,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x2c3",
+      "signal": "VCRIGHT_windowPositionStateRR",
+      "definition": [
+        52,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x122",
+      "signal": "VCLEFT_frontDoorState",
+      "definition": [
+        17,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x122",
+      "signal": "VCLEFT_rearDoorState",
+      "definition": [
+        20,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x123",
+      "signal": "VCRIGHT_frontDoorState",
+      "definition": [
+        17,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x123",
+      "signal": "VCRIGHT_rearDoorState",
+      "definition": [
+        20,
+        3,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x273",
+      "signal": "UI_mirrorFoldRequest",
+      "definition": [
+        24,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x273",
+      "signal": "UI_rearFogSwitch",
+      "definition": [
+        23,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x61d",
+      "signal": "UI_weatherSvcRaining",
+      "definition": [
+        56,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x61d",
+      "signal": "UI_weatherSvcSnowing",
+      "definition": [
+        57,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_switchStatusIndex",
+      "definition": [
+        0,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "M"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_hazardButtonPressed",
+      "definition": [
+        3,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_rearLeftBuckleSwitch",
+      "definition": [
+        52,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_rearCenterBuckleSwitch",
+      "definition": [
+        62,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_rearLeftOccupancySwitch",
+      "definition": [
+        56,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_rearCenterOccupancySwitch",
+      "definition": [
+        54,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c3",
+      "signal": "VCRIGHT_rearRightBuckleSwitch",
+      "definition": [
+        46,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c3",
+      "signal": "VCRIGHT_rearRightOccupancySwitch",
+      "definition": [
+        54,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m0"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcLeftPressed",
+      "definition": [
+        5,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcRightPressed",
+      "definition": [
+        12,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcLeftTiltRight",
+      "definition": [
+        3,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcRightTiltLeft",
+      "definition": [
+        8,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcRightTiltRight",
+      "definition": [
+        10,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcWiperButtonState",
+      "definition": [
+        22,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcHighBeamButtonState",
+      "definition": [
+        46,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcVoiceControlPress",
+      "definition": [
+        48,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
+      ]
+    }
+  ],
+  "window_request_values": {
+    "0": "IDLE",
+    "1": "GOTO_PERCENT",
+    "2": "GOTO_VENT",
+    "3": "GOTO_CLOSED",
+    "4": "GOTO_OPEN",
+    "5": "GOTO_CLOSED_CARWASH"
+  },
+  "limits": [
+    "DBC alone does not prove vehicle compatibility or ECU acceptance",
+    "Window STOP=6 is undefined; no stop-on-release command is sent",
+    "CH/PARTY torque is CAN FD DLC12, not classic CAN"
+  ]
+}

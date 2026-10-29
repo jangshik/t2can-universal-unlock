@@ -327,6 +327,35 @@ static void canATraceRecordTx(const struct can_frame *msg, McpTxResultReason rea
   portEXIT_CRITICAL(&canATxTraceMux);
 }
 
+// Conservative steering RX echo rejection for the macro observer. Equality
+// with a recent successful local TX is not evidence of a physical gesture.
+static bool canSteeringRecentTxEcho(uint8_t bus, const uint8_t *data,
+                                    uint8_t dlc, uint32_t now) {
+  if (!data || dlc != 8) return false;
+  bool found = false;
+  if (bus == 0) {
+    portENTER_CRITICAL(&canATxTraceMux);
+    for (unsigned n = 0; n < canATxTraceLiveCount; ++n) {
+      const auto &e = canATxTraceLive[n];
+      if (e.id == 0x3c2 && e.dlc == dlc && e.reason == MCP_TX_OK &&
+          e.result == MCP2515::ERROR_OK && uint32_t(now-e.capturedMs) <= 100 &&
+          memcmp(e.data, data, dlc) == 0) { found = true; break; }
+    }
+    portEXIT_CRITICAL(&canATxTraceMux);
+  } else {
+    portENTER_CRITICAL(&canBTxTraceMux);
+    for (unsigned n = 0; n < canBTxTraceLiveCount; ++n) {
+      const auto &e = canBTxTraceLive[n];
+      if (e.id == 0x3c2 && e.dlc == dlc && e.result == ESP_OK &&
+          uint32_t(now-e.capturedMs) <= 100 && memcmp(e.data, data, dlc) == 0) {
+        found = true; break;
+      }
+    }
+    portEXIT_CRITICAL(&canBTxTraceMux);
+  }
+  return found;
+}
+
 static void canATraceReset() {
   portENTER_CRITICAL(&canATxTraceMux);
   memset(canATxTraceLive, 0, sizeof(canATxTraceLive));
@@ -1357,7 +1386,7 @@ static void nagCfgLoad() {
       reader.getUChar("tsl9rt", TSL9_LEGACY_ROUTE_DEFAULT_PURE));
   nagCfg.pauseAtZeroSpeed = reader.getBool("p0", false);
   const uint8_t storedStopDefault = nagCfgVersion < 18u
-      ? H_STOP_STOCK_CARRIER : nagModeHDefaultStopBehaviorPure();
+      ? uint8_t(H_STOP_STOCK_CARRIER) : nagModeHDefaultStopBehaviorPure();
   nagCfg.modeHStopBehavior = reader.getUChar("hsb", storedStopDefault);
   if (!nagModeHStopBehaviorValidPure(nagCfg.modeHStopBehavior))
     nagCfg.modeHStopBehavior = nagModeHDefaultStopBehaviorPure();

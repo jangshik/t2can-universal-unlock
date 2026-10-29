@@ -105,6 +105,7 @@ static void invalidateCanTxStateInternal(uint8_t invalidatedBusMask) {
   continuousApResetForEpoch(barrierLocked ? canTxBarrierState.epoch : 0u);
   driverWindowLabResetRuntimeUnderTxBarrier();
   preheatRuntimeResetUnderTxBarrier();
+  convenienceResetUnderTxBarrier();
   summonHeartbeatOverrideResetUnderTxBarrier();
 
   // These transient feature requests are inexpensive to restart and are cleared
@@ -427,6 +428,7 @@ static void canTaskMcp(void* arg) {
       // above the USB-passive bail-out: a listen-only capture must not blind an
       // engine that is otherwise armed and transmitting.
       preheatRuntimeIngestCanA(rxf);
+      convenienceObserve(0, partyId, rxf.data, rxf.can_dlc, countryRxEpoch, prefetchedRxMs[bi]);
       // Identification remains a passive observation. Only the existing
       // decoders and TX paths are suppressed by USB passive mode.
       if (canUsbPassive()) continue;
@@ -614,6 +616,7 @@ static void canTaskTwai(void* arg) {
       // identifier, so it precedes the USB-passive bail-out: a listen-only
       // capture must not blind an engine that is otherwise armed.
       if (!f.extd && !f.rtr) preheatRuntimeIngestCanB(f);
+      if (!f.extd && !f.rtr) convenienceObserve(1, (uint16_t)f.identifier, f.data, f.data_length_code, countryRxEpoch, stockRxMs);
       // Only standard 11-bit DATA frames may reach Tesla decoders or TX paths.
       if (!canUsbPassive() && !f.extd && !f.rtr) {
         canTxMarkFresh(CAN_TX_FRESH_VH);

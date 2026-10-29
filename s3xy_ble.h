@@ -1,5 +1,10 @@
 #pragma once
 #include "text_format_arduino.h"
+#include "feature_actions.h"
+
+static bool featureActionEnqueue(uint8_t action);
+static bool featureActionSupported(uint8_t action);
+static void featureActionClearPending();
 
 // S3XY BUTTON BLE / REGISTRY / AUTO-RECONNECT
 // Kept in the same translation unit to preserve proven runtime behavior.
@@ -252,6 +257,7 @@ enum S3xyPendingClearScope : uint8_t {
 
 // Caller must hold s3xyMux; scope preserves each established reset boundary.
 static void s3xyClearPendingActionsLocked(S3xyPendingClearScope scope) {
+  featureActionClearPending();
   s3xyActionPending = 0;
   s3xyAccelActionPending = 0;
   s3xyPerformanceActionPending = 0;
@@ -329,6 +335,7 @@ static const char *s3xyStateName(uint8_t st) {
 }
 
 static const char *s3xyActionCode(uint8_t action) {
+  if (featureActionInfo(action)) return featureActionCode(action);
   if (action == S3XY_ACTION_NOA_CANCEL) return "noa_cancel";
   if (action == S3XY_ACTION_ACCEL_MODE_TOGGLE) return "accel_mode_toggle";
   if (action == S3XY_ACTION_PERFORMANCE_MODE) return "performance_mode";
@@ -346,6 +353,7 @@ static const char *s3xyActionCode(uint8_t action) {
 }
 
 static const char *s3xyActionLabel(uint8_t action) {
+  if (featureActionInfo(action)) return featureActionLabel(action);
   if (action == S3XY_ACTION_NOA_CANCEL) return "NOA Lane Change Cancel";
   if (action == S3XY_ACTION_ACCEL_MODE_TOGGLE) return "Acceleration Mode Toggle";
   if (action == S3XY_ACTION_PERFORMANCE_MODE) return "Performance Mode";
@@ -363,6 +371,7 @@ static const char *s3xyActionLabel(uint8_t action) {
 }
 
 static bool s3xyActionSupportedForCurrentProfile(uint8_t action) {
+  if (featureActionInfo(action)) return featureActionSupported(action);
   if (action == S3XY_ACTION_ACCEL_MODE_TOGGLE) return activeProfilePedalMapSupported();
   if (action == S3XY_ACTION_PERFORMANCE_MODE) return activeProfilePedalMapSupported();
   if (action == S3XY_ACTION_AUTO_BLINKER_TOGGLE) return activeProfileAdvancedEapSupported();
@@ -373,6 +382,7 @@ static bool s3xyActionSupportedForCurrentProfile(uint8_t action) {
 }
 
 static bool s3xyActionParseKnown(const String &s, uint8_t &out) {
+  if (featureActionParse(s.c_str(), out)) return true;
   if (s == "none" || s == "None") { out = S3XY_ACTION_NONE; return true; }
   if (s == "noa_cancel" || s == "NOA Lane Change Cancel") { out = S3XY_ACTION_NOA_CANCEL; return true; }
   if (s == "accel_mode_toggle" || s == "Acceleration Mode Toggle") { out = S3XY_ACTION_ACCEL_MODE_TOGGLE; return true; }
@@ -1192,6 +1202,10 @@ class S3xyClientCallbacks : public BLEClientCallbacks {
 static S3xyClientCallbacks *s3xyClientCallbacks[S3XY_MAX_DEVICES] = {};
 
 static void s3xyRunMappedAction(uint8_t slot, uint8_t action, const char *gesture) {
+  if (featureActionInfo(action)) {
+    if (!featureActionEnqueue(action)) s3xyLogPush(S3XY_LOG_INFO, "Mapped action unavailable or queue full", nullptr, 0, -127, (int8_t)slot);
+    return;
+  }
   if (action == S3XY_ACTION_NONE) return;
   if (!s3xyActionSupportedForCurrentProfile(action)) {
     s3xyLogPush(S3XY_LOG_INFO, "Mapped action unavailable for current vehicle profile", nullptr, 0, -127, (int8_t)slot);

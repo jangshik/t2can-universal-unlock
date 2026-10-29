@@ -234,3 +234,11 @@ This Universal release is based on source-level comparison and consolidation of:
 - LP_YL V2.0
 - Advanced EAP & EU-Unlock V2.6.0 for T-2CAN
 - T2CAN Universal v3.x
+
+## Pre-release convenience integration
+
+Juniper convenience controls, configurable steering macros and the shared S3XY
+action registry are described in [the integration review](docs/convenience-port-review.md).
+Easy Entry defaults OFF and can be enabled in Settings → Convenience & Macros.
+LAB → Easy Entry Test provides single-shot window commands and raw state diagnostics.
+See [DBC validation and remaining vehicle checks](docs/juniper-dbc-review.md).

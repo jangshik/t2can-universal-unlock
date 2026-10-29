@@ -67,6 +67,8 @@ struct String : std::string {
   String(unsigned char n):std::string(std::to_string(n)){}
 };
 static int lockDepth=0, s3xyMux=0;
+static unsigned featureActionPendingCount=0;
+static void featureActionClearPending(){featureActionPendingCount=0;}
 #define portENTER_CRITICAL(x) do { (void)(x); assert(lockDepth++==0); } while(0)
 #define portEXIT_CRITICAL(x) do { (void)(x); assert(--lockDepth==0); } while(0)
 struct Device { char name[28]; uint8_t singleAction,doubleAction,longAction; bool autoConnect,manualPaused,connected; uint32_t nextAttemptMs; };
@@ -123,7 +125,8 @@ int main(){
   }
   volatile uint32_t *pending[]={&s3xyActionPending,&s3xyAccelActionPending,&s3xyPerformanceActionPending,&s3xyResearchCaptureAPending,&s3xyResearchCaptureBPending,&s3xyResearchCaptureCPending,&s3xyResearchCaptureDPending,&s3xyResearchCaptureResetPending,&s3xyTlsscActionPending,&s3xyAutoBlinkerActionPending,&s3xyPreheatActionPending,&s3xyLeftBlinkerActionPending,&s3xyRightBlinkerActionPending};
   for(auto scope:{S3XY_PENDING_CAN_RECOVERY,S3XY_PENDING_ALL}){
-    for(auto p:pending)*p=7;portENTER_CRITICAL(&s3xyMux);s3xyClearPendingActionsLocked(scope);assert(lockDepth==1);portEXIT_CRITICAL(&s3xyMux);
+    featureActionPendingCount=3;for(auto p:pending)*p=7;portENTER_CRITICAL(&s3xyMux);s3xyClearPendingActionsLocked(scope);assert(lockDepth==1);portEXIT_CRITICAL(&s3xyMux);
+    assert(featureActionPendingCount==0);
     for(unsigned i=0;i<13;++i)assert(*pending[i]==(scope==S3XY_PENDING_CAN_RECOVERY&&i>=11?7u:0u));
   }
   for(unsigned mask=0;mask<8;++mask)for(size_t rawLen:{size_t(0),size_t(1),size_t(8),size_t(9)})for(bool complete:{false,true}){

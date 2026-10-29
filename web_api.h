@@ -1780,6 +1780,21 @@ static void httpS3xyBluetoothDisable() {
 }
 
 
+// Shared action dispatch runs on this same web task, outside BLE callbacks.
+static bool featureActionBluetoothToggle() {
+  if(s3xyBluetoothMasterIsEnabled()){
+    if(!s3xyBluetoothMasterPersist(false))return false;
+    if(s3xyMapperTaskIsRunning()||s3xyBleInitialized)s3xyRequestRuntimeStop();
+    return true;
+  }
+  if(s3xyRuntimeStopIsPending()&&!s3xyWaitForRuntimeStopped(2500))return false;
+  if(!s3xyBluetoothMasterPersist(true))return false;
+  if(!s3xyTaskHandle&&xTaskCreatePinnedToCore(s3xyMapperTask,"s3xyMap",8192,nullptr,1,&s3xyTaskHandle,0)!=pdPASS){
+    s3xyTaskHandle=nullptr;s3xyBluetoothMasterPersist(false);return false;
+  }
+  s3xyRuntimeRearmAutoReconnect();return true;
+}
+
 static void httpS3xyResetAllBluetooth() {
   if (!httpS3xyRequireBluetooth()) return;
   bool ok = s3xyQueueCommand(S3XY_CMD_RESET_ALL_BLUETOOTH);
@@ -2979,6 +2994,8 @@ static void httpIsaSuppressionControlUpdate() {
   }
   server.send(200, "application/json", isaSuppressionControlJson());
 }
+
+#include "convenience_web.h"
 
 static String continuousApControlJson(){
   const uint32_t now=(uint32_t)millis(),epoch=canTxEpochSnapshot();
@@ -5913,6 +5930,11 @@ static void webTask(void *arg) {
     server.on("/api/lab/summon-heartbeat/update", HTTP_POST,
               httpSummonHeartbeatOverrideUpdate);
     server.on("/api/features/status", HTTP_GET, httpFeatureStatus);
+    server.on("/api/feature-actions", HTTP_GET, httpFeatureActions);
+    server.on("/api/convenience/config", HTTP_GET, httpConvenienceConfig);
+    server.on("/api/lab/easy-entry/status", HTTP_GET, httpConvenienceWindowStatus);
+    server.on("/api/lab/easy-entry/test", HTTP_POST, httpConvenienceWindowTest);
+    server.on("/api/convenience/config", HTTP_POST, httpConvenienceUpdate);
     server.on("/api/features/lab", HTTP_POST, httpFeatureLab);
     server.on("/api/features/preheat", HTTP_POST, httpFeaturePreheat);
     server.on("/api/preheat/stats", HTTP_GET, httpPreheatStats);
@@ -5984,6 +6006,8 @@ static void webTask(void *arg) {
 
   for (;;) {
     server.handleClient();
+    convenienceService();
+    featureActionService();
     webBeat++;
     vTaskDelay(1);
   }

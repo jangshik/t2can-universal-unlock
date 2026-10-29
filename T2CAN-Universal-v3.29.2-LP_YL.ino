@@ -80,6 +80,8 @@
 #include "vehicle_logic.h"
 #include "continuous_ap_runtime.h"
 #include "preheat_runtime.h"
+#include "convenience_runtime.h"
+#include "feature_actions_runtime.h"
 #include "web_api.h"
 #include "can_runtime.h"
 #include "can_usb_logger_task.h"
@@ -214,6 +216,7 @@ void setup() {
   nvsSchemaFinalize();
   canBusOffPersistenceLoad();
   preheatMenuLoad();
+  convenienceLoad();
   if (labMenuEnabled) {
     researchCaptureInit();
     driverMonitorCaptureInit();
