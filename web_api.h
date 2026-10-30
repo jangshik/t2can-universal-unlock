@@ -2996,6 +2996,7 @@ static void httpIsaSuppressionControlUpdate() {
 }
 
 #include "convenience_web.h"
+#include "automation_web.h"
 
 static String continuousApControlJson(){
   const uint32_t now=(uint32_t)millis(),epoch=canTxEpochSnapshot();
@@ -5932,6 +5933,9 @@ static void webTask(void *arg) {
     server.on("/api/features/status", HTTP_GET, httpFeatureStatus);
     server.on("/api/feature-actions", HTTP_GET, httpFeatureActions);
     server.on("/api/convenience/config", HTTP_GET, httpConvenienceConfig);
+    server.on("/api/automation/config", HTTP_GET, httpAutomationConfig);
+    server.on("/api/automation/config", HTTP_POST, httpAutomationUpdate);
+    server.on("/api/automation/enabled", HTTP_POST, httpAutomationEnabled);
     server.on("/api/convenience/hazard-three-flash", HTTP_POST, httpConvenienceHazardThreeFlash);
     server.on("/api/lab/easy-entry/status", HTTP_GET, httpConvenienceWindowStatus);
     server.on("/api/lab/easy-entry/test", HTTP_POST, httpConvenienceWindowTest);
@@ -6008,6 +6012,7 @@ static void webTask(void *arg) {
   for (;;) {
     server.handleClient();
     convenienceService();
+    automationService();
     featureActionService();
     webBeat++;
     vTaskDelay(1);

@@ -106,6 +106,7 @@ static void invalidateCanTxStateInternal(uint8_t invalidatedBusMask) {
   driverWindowLabResetRuntimeUnderTxBarrier();
   preheatRuntimeResetUnderTxBarrier();
   convenienceResetUnderTxBarrier();
+  automationResetUnderTxBarrier();
   summonHeartbeatOverrideResetUnderTxBarrier();
 
   // These transient feature requests are inexpensive to restart and are cleared
@@ -428,7 +429,11 @@ static void canTaskMcp(void* arg) {
       // above the USB-passive bail-out: a listen-only capture must not blind an
       // engine that is otherwise armed and transmitting.
       preheatRuntimeIngestCanA(rxf);
+      // Never feed an injected camera press back into stock-template caches.
+      if (partyId==0x3c2 && rxf.can_dlc==8 && (rxf.data[0]&1) &&
+          (rxf.data[6]&0x0c) && canSteeringRecentTxEcho(0,rxf.data,8,prefetchedRxMs[bi])) continue;
       convenienceObserve(0, partyId, rxf.data, rxf.can_dlc, countryRxEpoch, prefetchedRxMs[bi]);
+      automationObserve(0, partyId, rxf.data, rxf.can_dlc, countryRxEpoch, prefetchedRxMs[bi]);
       // Identification remains a passive observation. Only the existing
       // decoders and TX paths are suppressed by USB passive mode.
       if (canUsbPassive()) continue;

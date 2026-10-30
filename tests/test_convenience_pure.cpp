@@ -52,8 +52,8 @@ static void reverse(){
  auto o=f.send(0x3C2,d);assert(o.count==1&&o.frames[0].data[0]==8);f.ack(o);assert(f.e.hazardOwned());
  // Runtime removes transmitted echoes before the stock observer.
  assert(f.send(0x273,d).count==1);
- f.now+=201;f.gear(2);assert(f.send(0x3C2,d).count==0); // no repeated ON
- f.now+=10;f.gear(4);assert(f.send(0x3C2,d).count==0);f.now+=400;f.gear(4);f.now+=390;f.gear(4);o=f.send(0x3C2,d);assert(o.count==1&&o.frames[0].effect==4);f.ack(o);assert(!f.e.hazardOwned());
+ f.now+=201;f.gear(2);d[0]=0x15;f.send(0x3f5,d);d[0]=0;assert(f.send(0x3C2,d).count==0); // no repeated ON
+ f.now+=10;f.gear(4);assert(f.send(0x3C2,d).count==0);f.now+=400;f.gear(4);d[0]=0x15;f.send(0x3f5,d);d[0]=0;f.now+=390;f.gear(4);o=f.send(0x3C2,d);assert(o.count==1&&o.frames[0].effect==4);f.ack(o);assert(!f.e.hazardOwned());
  assert(f.send(0x273,d).count==0);
  f.now+=201;f.gear(4);assert(f.send(0x3C2,d).count==0);
  Fixture failed;failed.c.reverseHazard=true;failed.gear(1);failed.send(0x3F5,d);failed.gear(2);o=failed.send(0x3C2,d);failed.ack(o,false);
@@ -61,6 +61,10 @@ static void reverse(){
  Fixture physical;physical.c.reverseHazard=true;physical.gear(1);d[6]=0x14;physical.send(0x3F5,d);physical.gear(2);d[6]=0;assert(physical.send(0x3C2,d).count==0);
  f.gear(2);f.now+=501;assert(f.send(0x273,d).count==0); // stale gear
  Fixture manual;manual.c.reverseHazard=true;manual.gear(1);manual.send(0x3F5,d);manual.gear(2);o=manual.send(0x3C2,d);manual.ack(o);d[0]=8;manual.send(0x3C2,d);assert(!manual.e.hazardOwned());d[0]=0;
+ // An alarm or absent/stale status cannot be mistaken for our owned hazards.
+ Fixture alarm;alarm.c.reverseHazard=true;alarm.gear(1);alarm.send(0x3f5,d);alarm.gear(2);alarm.ack(alarm.send(0x3c2,d));d[0]=0x6a;alarm.send(0x3f5,d);d[0]=0;alarm.gear(4);assert(!alarm.e.hazardOwned()&&alarm.send(0x3c2,d).count==0);
+ Fixture unconfirmed;unconfirmed.c.reverseHazard=true;unconfirmed.gear(1);unconfirmed.send(0x3f5,d);unconfirmed.gear(2);unconfirmed.ack(unconfirmed.send(0x3c2,d));unconfirmed.gear(4);assert(!unconfirmed.e.hazardOwned()&&unconfirmed.send(0x3c2,d).count==0);
+ Fixture turning;turning.c.reverseHazard=true;turning.gear(1);d[0]=2;turning.send(0x3f5,d);turning.gear(2);d[0]=0;assert(turning.send(0x3c2,d).count==0);
  Fixture boot;boot.c.reverseHazard=true;boot.send(0x3F5,d);boot.gear(2);assert(boot.send(0x3C2,d).count==0); // no synthetic boot edge
 }
 static void hazardThreeFlash(){

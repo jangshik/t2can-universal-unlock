@@ -13,12 +13,13 @@ using portMUX_TYPE=int;
 constexpr int pdTRUE=1;
 bool labMenuEnabled=true;
 bool held=false,saveOk=true,readOk=true,recordPresent=false;
+bool autoRecordPresent=false,autoV2Present=false,transportOk=true;uint8_t autoSaved[64]={},autoV2Saved[208]={};
 int canTxBarrierMutex=1;uint32_t now=4000,bootTime=0;uint8_t saved[32]={};
 uint32_t millis(){return now;}
 int xSemaphoreTake(int,int){if(held)return 0;held=true;return 1;}
 void xSemaphoreGive(int){assert(held);held=false;}
-bool nvsCheckedWriteBlob(const char*,const char*,const void*p,size_t n){assert(held&&n==32);if(!saveOk)return false;memcpy(saved,p,n);recordPresent=true;return true;}
-bool nvsCheckedReadBlob(const char*,const char*,void*p,size_t n,bool& found){found=recordPresent;if(found)memcpy(p,saved,n);return readOk;}
+bool nvsCheckedWriteBlob(const char*,const char*key,const void*p,size_t n){assert(held);if(!saveOk)return false;if(!strcmp(key,"automation_v2")){assert(n==208);memcpy(autoV2Saved,p,n);autoV2Present=true;}else if(!strcmp(key,"automation")){assert(n==64);memcpy(autoSaved,p,n);autoRecordPresent=true;}else{assert(n==32);memcpy(saved,p,n);recordPresent=true;}return true;}
+bool nvsCheckedReadBlob(const char*,const char*key,void*p,size_t n,bool& found){const bool a=!strcmp(key,"automation"),v2=!strcmp(key,"automation_v2");found=v2?autoV2Present:(a?autoRecordPresent:recordPresent);if(found)memcpy(p,v2?autoV2Saved:(a?autoSaved:saved),n);return readOk;}
 bool vehicleProfileSetupMode=false,vehicleProfileNvsError=false,passive=false;
 bool mcpReady=true,twaiReady=true,canTxAdministrativeHold=false;
 uint8_t activeVehicleProfile=VEHICLE_MODEL_Y_JUNIPER;
@@ -45,7 +46,7 @@ void featureActionClearPending(){actions.clear();}
 void(*beforeValidate)()=nullptr;
 bool canTxMcpSendValidated(can_frame*f,uint32_t epoch,bool(*validate)(can_frame*,void*),void*c,MCP2515::ERROR&e){
  if(beforeValidate)beforeValidate();
- if(epoch!=canTxBarrierState.epoch||canTxAdministrativeHold||!validate(f,c))return false;
+ if(epoch!=canTxBarrierState.epoch||canTxAdministrativeHold||!validate(f,c)||!transportOk)return false;
  sent.push_back(*f);e=MCP2515::ERROR_OK;return true;
 }
 using esp_err_t=int;

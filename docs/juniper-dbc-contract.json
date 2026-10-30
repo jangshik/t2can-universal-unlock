@@ -1,8 +1,8 @@
 {
   "sources": {
     "Bayberry_VEH.dbc": "bee2b42ff573136494f79b1a0f52f579a46d44bf5d8331efef166b54e31bad29",
-    "Bayberry_PARTY.dbc": "eb954704bed42d4768698f31c98f1a72bb1e1b11052a358b9f65d9d807453747",
-    "Bayberry_CH.dbc": "883dbb50eed9a4c3a25cf40462dc0036d02a78229fe50f078f8911f130228f22"
+    "Bayberry_CH.dbc": "883dbb50eed9a4c3a25cf40462dc0036d02a78229fe50f078f8911f130228f22",
+    "Bayberry_PARTY.dbc": "eb954704bed42d4768698f31c98f1a72bb1e1b11052a358b9f65d9d807453747"
   },
   "verified_fields": [
     {
@@ -36,6 +36,20 @@
     {
       "bus": "VEH",
       "id": "0x257",
+      "signal": "DI_vehicleSpeed",
+      "definition": [
+        43,
+        13,
+        1,
+        "+",
+        0.08,
+        -40.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x257",
       "signal": "DI_uiSpeed",
       "definition": [
         24,
@@ -118,7 +132,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x118",
       "signal": "DI_gear",
       "definition": [
@@ -132,7 +146,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x118",
       "signal": "DI_accelPedalPos",
       "definition": [
@@ -146,7 +160,21 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
+      "id": "0x257",
+      "signal": "DI_vehicleSpeed",
+      "definition": [
+        43,
+        13,
+        1,
+        "+",
+        0.08,
+        -40.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
       "id": "0x257",
       "signal": "DI_uiSpeed",
       "definition": [
@@ -160,7 +188,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x257",
       "signal": "DI_uiSpeedUnits",
       "definition": [
@@ -174,7 +202,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x129",
       "signal": "SCCM_steeringAngle",
       "definition": [
@@ -188,7 +216,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x129",
       "signal": "SCCM_steeringAngleValidity",
       "definition": [
@@ -202,7 +230,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x129",
       "signal": "SCCM_steeringAngleSensorStatus",
       "definition": [
@@ -216,7 +244,7 @@
       ]
     },
     {
-      "bus": "PARTY",
+      "bus": "CH",
       "id": "0x39d",
       "signal": "IBST_driverBrakeApply",
       "definition": [
@@ -230,7 +258,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x118",
       "signal": "DI_gear",
       "definition": [
@@ -244,7 +272,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x118",
       "signal": "DI_accelPedalPos",
       "definition": [
@@ -258,7 +286,21 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
+      "id": "0x257",
+      "signal": "DI_vehicleSpeed",
+      "definition": [
+        43,
+        13,
+        1,
+        "+",
+        0.08,
+        -40.0,
+        null
+      ]
+    },
+    {
+      "bus": "PARTY",
       "id": "0x257",
       "signal": "DI_uiSpeed",
       "definition": [
@@ -272,7 +314,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x257",
       "signal": "DI_uiSpeedUnits",
       "definition": [
@@ -286,7 +328,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x129",
       "signal": "SCCM_steeringAngle",
       "definition": [
@@ -300,7 +342,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x129",
       "signal": "SCCM_steeringAngleValidity",
       "definition": [
@@ -314,7 +356,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x129",
       "signal": "SCCM_steeringAngleSensorStatus",
       "definition": [
@@ -328,7 +370,7 @@
       ]
     },
     {
-      "bus": "CH",
+      "bus": "PARTY",
       "id": "0x39d",
       "signal": "IBST_driverBrakeApply",
       "definition": [
@@ -591,6 +633,48 @@
         1.0,
         0.0,
         null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x353",
+      "signal": "UI_cameraActive",
+      "definition": [
+        41,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x294",
+      "signal": "UI_fasciaCameraShown",
+      "definition": [
+        39,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3c2",
+      "signal": "VCLEFT_swcCameraButtonState",
+      "definition": [
+        50,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        "m1"
       ]
     },
     {

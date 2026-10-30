@@ -65,7 +65,8 @@ class ConvenienceEngine {
   bool hazardPulseValid(bool target,uint32_t now) const {
     return hazardPulse_&&hazardTarget_==target&&!hazardButtonPressed_&&
       uint32_t(now-hazardMs_)<200&&fresh(gearSeen_,gearMs_,now,500)&&
-      (burst_==Burst::Idle||fresh(indicatorSeen_,indicatorMs_,now,500));
+      fresh(indicatorSeen_,indicatorMs_,now,500)&&
+      (target?(hazardReason_<=1&&(burst_!=Burst::Idle||gear_==2)):hazardReason_==1);
   }
   void acknowledge(const ConvenienceFrame& f,bool sent) {
     if(!sent)return;
@@ -93,7 +94,10 @@ class ConvenienceEngine {
       }
     }
     if(!c.reverseHazard&&burst_==Burst::Idle){
-      if(hazardOwned_){hazardRequest_=true;hazardRequestedTarget_=false;}
+      if(hazardOwned_){
+        if(fresh(indicatorSeen_,indicatorMs_,now,500)&&hazardReason_==1){hazardRequest_=true;hazardRequestedTarget_=false;}
+        else cancelHazardBurst();
+      }
       else if(hazardRequest_&&hazardRequestedTarget_)hazardRequest_=false;
     }
     if(!c.easyEntry)memset(dropped_,0,sizeof(dropped_));
@@ -108,8 +112,9 @@ class ConvenienceEngine {
       }
       if(c.reverseHazard && edge && (next==2 || gear_==2)){
         const bool hazards=indicatorLeft_&&indicatorRight_;
-        const bool canStart=next==2&&!hazardOwned_&&fresh(indicatorSeen_,indicatorMs_,now,500)&&!hazards;
-        const bool canStop=next!=2&&hazardOwned_;
+        const bool canStart=next==2&&!hazardOwned_&&fresh(indicatorSeen_,indicatorMs_,now,500)&&!hazards&&lightingIdle_;
+        const bool canStop=next!=2&&hazardOwned_&&fresh(indicatorSeen_,indicatorMs_,now,500)&&hazardReason_==1;
+        if(next!=2&&hazardOwned_&&!canStop)cancelHazardBurst();
         if(canStart||canStop){hazardRequest_=true;hazardRequestedTarget_=canStart;}
         else if(next!=2&&hazardRequest_&&hazardRequestedTarget_)hazardRequest_=false;
       }
@@ -129,6 +134,8 @@ class ConvenienceEngine {
       const uint8_t left=d[0]&3,right=(d[0]>>2)&3;
       hazardReason_=d[0]>>4;
       lightingIdle_=left==0&&right==0&&hazardReason_==0&&(d[6]&0x3e)==0;
+      if(burst_==Burst::Idle&&hazardOwned_&&
+         (!indicatorSeen_||hazardReason_>1||(d[6]&2)||(hazardReason_==0&&uint32_t(now-hazardMs_)>=1000)))cancelHazardBurst();
       if(burst_!=Burst::Idle){
         if(!indicatorSeen_||left==3||right==3||(d[6]&2)||hazardReason_>1)cancelHazardBurst();
         else if(burst_==Burst::Starting&&!lightingIdle_)cancelHazardBurst();
@@ -201,6 +208,7 @@ class ConvenienceEngine {
         hazardTarget_=hazardRequestedTarget_;hazardRequest_=false;
         if(hazardTarget_!=hazardOwned_){hazardPulse_=true;hazardPulseSeen_=true;hazardMs_=now;}
       }
+      if(hazardPulse_&&!hazardTarget_&&(!fresh(indicatorSeen_,indicatorMs_,now,500)||hazardReason_!=1))cancelHazardBurst();
       if(hazardPulse_){
         if(!fresh(gearSeen_,gearMs_,now,500)||uint32_t(now-hazardMs_)>=200)hazardPulse_=false;
         else if((d[0]&8)==0){f.data[0]|=8;f.effect=hazardTarget_?3:4;}

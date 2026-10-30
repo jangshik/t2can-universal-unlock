@@ -7,11 +7,12 @@ async function check(html,label){
  try{
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[],posts=[];
   page.on('pageerror',error=>errors.push(error.message));
-  let fail=false,body=true,testFail=false,testPosts=0,hazardPosts=0,hazardFail=false;
+  let fail=false,body=true,testFail=false,testPosts=0,hazardPosts=0,hazardFail=false,autoFail=false,autoPosts=0,autoTogglePosts=0;
   const lab={ready:true,sent:0,lastTx:"00 00 00 00 00 50 11 00",states:Array.from({length:4},()=>({door:1,window:1,doorAgeMs:20,windowAgeMs:20}))};
   const actions=[{id:0,key:'none',label:'None',supported:true},{id:14,key:'master_toggle',label:'CAN Master / Listen Only',supported:true},{id:15,key:'kickdown_toggle',label:'Kickdown',supported:true}];
   actions.push({id:54,key:'hazard_three_flash',label:'Hazard Light · 3 Flashes',supported:true});
   const config={hazardThreeFlashReady:true,hazardThreeFlashActive:false,hazardThreeFlashCount:0,supported:true,macroSupported:true,easyEntrySupported:true,seatbeltTxSupported:true,masterEnabled:true,kickdown:false,easyEntry:false,mirrorSync:false,rearBeltLeft:false,rearBeltCenter:false,rearBeltRight:false,reverseHazard:false,reverseFog:false,macrosEnabled:false,kickOnPct:90,kickOffPct:10,kickReleaseMode:2,debounceMs:30,clickGapMs:350,longPressMs:800,slots:Array.from({length:3},()=>({button:0,gesture:2,action:0})),actions};
+  const automation={capacity:16,supported:true,running:true,nvsError:false,active:0,invalid:0,cameraState:0,actions:0,rejected:0,speedFresh:true,speedCenti:1000,gearFresh:true,gear:4,brakeFresh:true,brake:1,cameraFresh:true,cameraOn:false,featureActions:actions,rules:Array.from({length:16},()=>({enabled:false,sensor:1,low:1,high:20,gear:4,action:255,trigger:0,enterMs:0,exitMs:3000}))};
   const ap={enabled:false,method:0,supported:true,stalkSupported:false,scrollSingleSupported:true,scrollDoubleSupported:true};
   await page.route('http://convenience.test/**',async route=>{
    const req=route.request(),u=new URL(req.url());let result={};
@@ -22,6 +23,14 @@ async function check(html,label){
    else if(u.pathname==='/api/lab/easy-entry/test'){assert.equal(req.method(),'POST');testPosts++;if(testFail)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Park required'})});assert.equal(u.searchParams.get('percent'),'100');lab.sent++;result=lab;}
    else if(u.pathname==='/api/convenience/hazard-three-flash'){assert.equal(req.method(),'POST');hazardPosts++;if(hazardFail)return route.fulfill({status:409,contentType:'application/json',body:'{}'});config.hazardThreeFlashReady=false;config.hazardThreeFlashActive=true;result=config;}
    else if(u.pathname==='/api/feature-actions')result={actions};
+   else if(u.pathname==='/api/automation/enabled'){
+    assert.equal(req.method(),'POST');autoTogglePosts++;
+    const slot=Number(u.searchParams.get('slot'));automation.rules[slot].enabled=u.searchParams.get('enabled')==='1';result=automation;
+   }
+   else if(u.pathname==='/api/automation/config'){
+    if(req.method()==='POST'){autoPosts++;if(autoFail){autoFail=false;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'save failed'})});}const slot=Number(u.searchParams.get('slot'));for(const [k,v]of u.searchParams){if(k!=='slot')automation.rules[slot][k]=k==='enabled'?v==='1':+v;}}
+    result=automation;
+   }
    else if(u.pathname==='/api/convenience/config'){
     if(req.method()==='POST'){
      posts.push(u.search);
@@ -82,6 +91,37 @@ async function check(html,label){
   testFail=true;await page.locator('#entryTestSend').click();
   await page.waitForFunction(()=>document.querySelector('#entryTestResult').textContent.includes('No automatic retry'));assert.equal(testPosts,2);
   lab.ready=false;await page.evaluate(()=>fetchEntryTest());assert(await page.locator('#entryTestSend').isDisabled());
+  await page.evaluate(()=>openPanel('panelConvenience'));
+  await page.locator('#automationSettingsRow').click();
+  await page.waitForFunction(()=>automationSaved&&!automationBusy);
+  assert.equal(await page.locator('#auto_low').inputValue(),'1');assert.equal(await page.locator('#auto_exitMs').inputValue(),'3000');
+  await page.locator('#autoPreset').click();await page.locator('label:has(#auto_enabled)').click();
+  await page.locator('#auto_high').fill('15');await page.locator('#auto_high').dispatchEvent('change');
+  await page.evaluate(()=>fetchAutomation());assert.equal(await page.locator('#auto_high').inputValue(),'15');
+  await page.locator('#autoSave').click();await page.waitForFunction(()=>!automationBusy&&automationSaved.rules[0].enabled);
+  assert.equal(autoPosts,1);assert.equal(automation.rules[0].high,15);
+  await page.locator('#auto_slot').selectOption('1');await page.locator('#auto_sensor').selectOption('2');
+  assert(await page.locator('#autoLowRow').isHidden());await page.locator('#auto_match').selectOption('4');await page.locator('#auto_action').selectOption('54');
+  await page.locator('label:has(#auto_enabled)').click();await page.locator('#autoSave').click();
+  await page.waitForFunction(()=>!automationBusy&&automationSaved.rules[1].action===54);assert.equal(autoPosts,2);
+  autoFail=true;await page.locator('#auto_match').selectOption('3');await page.locator('#autoSave').click();
+  await page.waitForFunction(()=>!automationBusy&&document.querySelector('#automationSaveState').textContent.includes('Reload'));
+  await page.locator('#autoReload').click();await page.waitForFunction(()=>!automationUncertain);assert.equal(autoPosts,3);
+  assert.equal(await page.locator('#auto_high').inputValue(),'4');
+  assert.equal(await page.locator('#auto_slot option').count(),16);
+  await page.locator('#auto_slot').selectOption('15');await page.locator('#auto_action').selectOption('54');
+  await page.locator('#auto_high').fill('25');await page.locator('#autoSave').click();await page.waitForFunction(()=>!automationBusy&&automationSaved.rules[15].high===25);
+  const storedRule=JSON.stringify({...automation.rules[15],enabled:false});
+  await page.locator('#automationRuleList').evaluate(el=>el.parentElement.open=true);
+  await page.locator('label:has([data-auto-toggle="15"])').click();await page.waitForFunction(()=>!automationBusy&&automationSaved.rules[15].enabled);
+  assert.equal(autoTogglePosts,1);assert.equal(JSON.stringify({...automation.rules[15],enabled:false}),storedRule);
+  await page.locator('label:has([data-auto-toggle="15"])').click();await page.waitForFunction(()=>!automationBusy&&!automationSaved.rules[15].enabled);
+  assert.equal(autoTogglePosts,2);assert.equal(JSON.stringify(automation.rules[15]),storedRule);
+  await page.evaluate(()=>fetchAutomation());assert.equal(await page.locator('#auto_high').inputValue(),'25');
+  await page.locator('#automationRuleList').evaluate(el=>el.parentElement.open=false);
+
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  if(process.env.T2CAN_AUTOMATION_SCREENSHOT&&label==='source'){await page.evaluate(()=>{document.querySelector('#panelAutomation').scrollTop=0;window.scrollTo(0,0)});await page.screenshot({path:process.env.T2CAN_AUTOMATION_SCREENSHOT,fullPage:false});}
   assert.deepEqual(errors,[]);
   console.log('PASS convenience/shared actions '+label);
  }finally{await browser.close();}

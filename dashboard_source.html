@@ -125,6 +125,7 @@ body.t2-2027 .panel .r.rNote>span:last-child{flex-basis:100%;white-space:normal;
 /* Pack Temperature, Heat Power and Coolant Flow share the theme's three-cell .actionSummary strip, the component the
    Devices tab already uses, so they carry no local styling here; the tab only
    adds the centring override next to that component's definition. */
+#automationForm [hidden]{display:none!important}
 </style>
 
 
@@ -1076,8 +1077,9 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="softNote">Bluetooth Master and Global Auto Connect settings are preserved. Bluetooth must be ON to fully remove the controller's BLE bond database.</div>
 </div></section>
 <!-- Settings detail panels -->
+<section class="panel" data-back-target="panelConvenience" id="panelAutomation"><div class="panelin"><div class="paneltop"><button aria-label="Back" class="backbtn"><svg aria-hidden="true" class="backIcon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">Convenience</div></div><div class="panelHero">Automations</div><div class="panelSub">Sensor → condition → delay → action. Sixteen saved rules, evaluated locally.</div><div class="softNote" id="automationLive" role="status" aria-live="polite">Loading…</div><details><summary>Saved rules · enable or disable</summary><section class="card" id="automationRuleList"></section></details><section class="card"><div class="labControlRow"><label for="auto_slot" class="labControlTitle">Rule</label><select id="auto_slot" class="selectArrow labSelect"><option value="0">Rule 1</option><option value="1">Rule 2</option><option value="2">Rule 3</option><option value="3">Rule 4</option><option value="4">Rule 5</option><option value="5">Rule 6</option><option value="6">Rule 7</option><option value="7">Rule 8</option><option value="8">Rule 9</option><option value="9">Rule 10</option><option value="10">Rule 11</option><option value="11">Rule 12</option><option value="12">Rule 13</option><option value="13">Rule 14</option><option value="14">Rule 15</option><option value="15">Rule 16</option></select></div><div class="controlgrid"><button type="button" class="btn" id="autoPreset">Low-speed camera preset</button></div></section><form id="automationForm"><section class="card"><div class="settingToggleRow"><div><div class="listkey">Enable rule</div><div class="listdesc">Runs on the device while the dashboard is closed.</div></div><label class="toggle"><input id="auto_enabled" type="checkbox"/><span class="track"></span></label></div><div class="labControlRow"><label for="auto_sensor" class="labControlTitle">Sensor</label><select id="auto_sensor" class="selectArrow labSelect"><option value="1">Speed (km/h)</option><option value="2">Gear</option><option value="3">Brake</option></select></div><div class="labControlRow" id="autoMatchRow"><label for="auto_match" class="labControlTitle">Is</label><select id="auto_match" class="selectArrow labSelect"></select></div><div class="labControlRow" id="autoLowRow"><label for="auto_low" class="labControlTitle">Minimum (inclusive)</label><input id="auto_low" class="labSelect" style="max-width:110px" type="number" min="0" max="150" step="1" required/></div><div class="labControlRow" id="autoHighRow"><label for="auto_high" class="labControlTitle">Maximum (inclusive)</label><input id="auto_high" class="labSelect" style="max-width:110px" type="number" min="0" max="150" step="1" required/></div><div class="labControlRow"><label for="auto_gear" class="labControlTitle">Also require gear</label><select id="auto_gear" class="selectArrow labSelect"><option value="0">Any</option><option value="1">Park</option><option value="2">Reverse</option><option value="3">Neutral</option><option value="4">Drive</option></select></div><div class="labControlRow"><label for="auto_trigger" class="labControlTitle">Run when condition</label><select id="auto_trigger" class="selectArrow labSelect"><option value="0">Becomes true</option><option value="1">Becomes false</option></select></div><div class="labControlRow"><label for="auto_enterMs" class="labControlTitle">Enter delay (ms)</label><input id="auto_enterMs" class="labSelect" style="max-width:110px" type="number" min="0" max="30000" step="1" required/></div><div class="labControlRow"><label for="auto_exitMs" class="labControlTitle">Exit delay (ms)</label><input id="auto_exitMs" class="labSelect" style="max-width:110px" type="number" min="0" max="30000" step="1" required/></div><div class="labControlRow"><label for="auto_action" class="labControlTitle">Action</label><select id="auto_action" class="selectArrow labSelect"><option value="255">Camera · automatic close</option></select></div></section><div class="controlgrid"><button class="btn primary" id="autoSave" type="submit">Save rule</button><button class="btn" id="autoReload" type="button">Reload saved rule</button></div></form><div class="softNote" id="automationSaveState" role="status" aria-live="polite"></div><div class="softNote">Camera: Speed + Drive + Becomes true. Opens only from a confirmed OFF state; closes after the exit delay only if this rule opened it. Re-entry cancels the delay. A physical camera press, Reverse, unavailable inputs or a settings change relinquishes automatic control.</div><div class="softNote">Other actions run once on the selected transition. Toggle actions invert the current setting. After boot, saving or lost input, the first reading establishes a baseline; wait for a new transition. A changed rule waits for a new transition. Other rules keep running. Changing the active camera rule leaves its open camera unchanged.</div><section class="card"><div class="detailRow clickable" data-panel="panelConvenience"><div><div class="detailLeft">Reverse Hazard</div><div class="detailSub">Use the existing switch in Convenience &amp; Macros for hazards throughout Reverse.</div></div><span class="chev">›</span></div></section></div></section>
 <section class="panel" id="panelConvenience"><div class="panelin"><div class="paneltop"><button aria-label="Back" class="backbtn"><svg aria-hidden="true" class="backIcon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">Settings</div></div><div class="panelHero">Convenience &amp; Macros</div><div class="panelSub">Choose the features and button gestures for this vehicle.</div><section class="card"><div class="settingToggleRow"><div><div class="listkey">CAN Transmission</div><div class="listdesc">Off switches both CAN controllers to listen-only mode.</div></div><label class="toggle"><input disabled id="conv_masterEnabled" data-conv="masterEnabled" type="checkbox"/><span class="track"></span></label></div>
-<div class="softNote" id="convenienceSupport">Loading vehicle capabilities…</div></section><div class="sectionhead"><div class="sectiontitle">Kickdown</div></div><section class="card"><div class="settingToggleRow"><div><div class="listkey">Kickdown</div><div class="listdesc">Temporarily request Sport from Chill above the pedal threshold.</div></div><label class="toggle"><input disabled id="conv_kickdown" data-conv="kickdown" type="checkbox"/><span class="track"></span></label></div>
+<div class="softNote" id="convenienceSupport">Loading vehicle capabilities…</div></section><section class="card"><div class="detailRow clickable" id="automationSettingsRow" data-panel="panelAutomation"><div><div class="detailLeft">Automations</div><div class="detailSub">Low-speed camera and sensor-based rules</div></div><span class="chev">›</span></div></section><div class="sectionhead"><div class="sectiontitle">Kickdown</div></div><section class="card"><div class="settingToggleRow"><div><div class="listkey">Kickdown</div><div class="listdesc">Temporarily request Sport from Chill above the pedal threshold.</div></div><label class="toggle"><input disabled id="conv_kickdown" data-conv="kickdown" type="checkbox"/><span class="track"></span></label></div>
 <div class="labControlRow"><div><div class="labControlTitle">Engage above (%)</div><div class="labControlSub"></div></div><input disabled class="labSelect" style="max-width:110px" id="conv_kickOnPct" data-conv="kickOnPct" aria-label="Engage above (%)" type="number" min="1" max="100" step="1"/></div>
 <div class="labControlRow"><div><div class="labControlTitle">Release below (%)</div><div class="labControlSub"></div></div><input disabled class="labSelect" style="max-width:110px" id="conv_kickOffPct" data-conv="kickOffPct" aria-label="Release below (%)" type="number" min="0" max="99" step="1"/></div>
 <div class="labControlRow"><div class="labControlTitle">Release condition</div><select disabled class="selectArrow labSelect" id="conv_kickReleaseMode" data-conv="kickReleaseMode" aria-label="Release condition"><option value="0">Pedal threshold</option><option value="1">Brake</option><option value="2">Pedal or brake</option></select></div>
@@ -1485,6 +1487,86 @@ $('entryTestSend').onclick=async()=>{
  entryTestBusy=true;renderEntryTest(entryTestSaved);$('entryTestResult').textContent='Sending…';
  try{const r=await fetch('/api/lab/easy-entry/test?'+query,{method:'POST'});const s=await r.json();if(!r.ok)throw Error(s.error||'Send failed');renderEntryTest(s);$('entryTestResult').textContent='Sent once. Check vehicle response.'}catch(e){$('entryTestResult').textContent=e.message+' No automatic retry.'}finally{entryTestBusy=false;await fetchEntryTest()}
 };
+
+let automationSaved=null,automationBusy=false,automationDirty=false,automationUncertain=false;
+const automationKeys=['enabled','sensor','low','high','gear','trigger','enterMs','exitMs','action'];
+function automationResponse(s){
+ if(!s||typeof s.supported!=='boolean'||!Array.isArray(s.rules)||s.capacity!==16||s.rules.length!==s.capacity||!Array.isArray(s.featureActions)||s.rules.some(r=>typeof r.enabled!=='boolean'||automationKeys.slice(1).some(k=>!Number.isInteger(r[k]))))throw Error('Automation settings unavailable');return s;
+}
+function automationLock(){
+ const locked=automationBusy||automationUncertain||!automationSaved;
+ for(const k of automationKeys)$('auto_'+k).disabled=locked;
+ $('autoSave').disabled=locked;$('autoPreset').disabled=locked;$('auto_slot').disabled=automationBusy||automationDirty||automationUncertain;
+ $('autoReload').disabled=automationBusy;$('auto_match').disabled=locked;
+ for(const el of document.querySelectorAll('[data-auto-toggle]'))el.disabled=locked||automationDirty;
+}
+function renderAutomationEditor(){
+ if(!automationSaved)return;
+ const r=automationSaved.rules[Number($('auto_slot').value)];
+ const select=$('auto_action');select.replaceChildren(new Option('Camera · automatic close','255'));
+ for(const a of automationSaved.featureActions){if(!a.id)continue;const o=new Option(a.label,String(a.id));o.disabled=!a.supported;select.add(o)}
+ for(const k of automationKeys){const el=$('auto_'+k);if(k==='enabled')el.checked=r[k];else el.value=String(r[k]);}
+ automationDirty=false;automationConditionEditor();renderAutomationRuleList();automationLock();
+}
+function renderAutomationRuleList(){
+ const list=$('automationRuleList');if(!automationSaved)return;list.replaceChildren();
+ automationSaved.rules.forEach((r,i)=>{
+  const row=document.createElement('div');row.className='settingToggleRow';
+  const copy=document.createElement('div'),title=document.createElement('div'),desc=document.createElement('div');title.className='listkey';title.textContent='Rule '+(i+1);desc.className='listdesc';
+  const names=['','Park','Reverse','Neutral','Drive'];const sensor=r.sensor===1?r.low+'–'+r.high+' km/h':r.sensor===2?(names[r.low]||'Gear'):(r.low===2?'Brake pressed':'Brake released');
+  const action=r.action===255?'Camera · automatic close':automationSaved.featureActions.find(a=>a.id===r.action)?.label||'Action';
+  desc.textContent=sensor+' → '+action;copy.append(title,desc);
+  const label=document.createElement('label');label.className='toggle';const input=document.createElement('input');input.type='checkbox';input.checked=r.enabled;input.dataset.autoToggle=String(i);input.setAttribute('aria-label','Enable rule '+(i+1));
+  input.onchange=()=>toggleSavedAutomation(i,input.checked);const track=document.createElement('span');track.className='track';label.append(input,track);row.append(copy,label);list.append(row);
+ });
+ automationLock();
+}
+async function toggleSavedAutomation(slot,enabled){
+ if(automationBusy||automationDirty||automationUncertain||!automationSaved){renderAutomationRuleList();return;}
+ automationBusy=true;automationLock();$('automationSaveState').textContent='Saving rule state…';
+ try{const q=new URLSearchParams({slot:String(slot),enabled:enabled?'1':'0'});const r=await fetch('/api/automation/enabled?'+q,{method:'POST'});const s=await r.json();if(!r.ok)throw Error(s.error||'Save failed');automationSaved=automationResponse(s);renderAutomationEditor();renderAutomationLive(s);$('automationSaveState').textContent='Rule '+(slot+1)+(enabled?' enabled':' disabled')+' · condition and action preserved';}
+ catch(e){automationUncertain=true;$('automationSaveState').textContent=e.message+' · Reload saved rule before retrying.';renderAutomationRuleList();}
+ finally{automationBusy=false;automationLock();}
+}
+function renderAutomationLive(s){
+ const gear=['—','P','R','N','D'][s.gear]||'—';
+ $('automationLive').textContent=(s.running?'Running':'Paused')+' · Speed '+(s.speedFresh?(s.speedCenti/100).toFixed(1)+' km/h':'unavailable')+' · Gear '+(s.gearFresh?gear:'unavailable')+' · Camera '+(s.cameraState===2?'opened by automation':s.cameraState===1?'waiting for confirmation':s.cameraFresh?(s.cameraOn?'already on':'off'):'unavailable')+' · '+s.actions+' accepted / '+s.rejected+' rejected';
+ if(!s.supported)$('automationLive').textContent='Automations require Juniper Body + Chassis.';
+ if(s.nvsError)$('automationLive').textContent+=' · Saved configuration could not be read; rules disabled.';
+}
+async function fetchAutomation(){
+ if(automationBusy)return;
+ try{const r=await fetch('/api/automation/config',{cache:'no-store'});if(!r.ok)throw Error('Status unavailable');const s=automationResponse(await r.json());const first=!automationSaved;automationSaved=s;renderAutomationLive(s);if(first||automationUncertain){automationUncertain=false;renderAutomationEditor();if(!first)$('automationSaveState').textContent='Saved settings reloaded. Review before saving again.';}renderAutomationRuleList();automationLock();}
+ catch(e){$('automationLive').textContent=e.message;automationUncertain=true;automationLock();}
+}
+function automationConditionEditor(changed=false){
+ const sensor=Number($('auto_sensor').value),speed=sensor===1;
+ $('autoLowRow').hidden=!speed;$('autoHighRow').hidden=!speed;$('autoMatchRow').hidden=speed;
+ const match=$('auto_match');match.replaceChildren();
+ if(!speed){for(const [v,label]of(sensor===2?[[1,'Park'],[2,'Reverse'],[3,'Neutral'],[4,'Drive']]:[[1,'Released'],[2,'Pressed']]))match.add(new Option(label,String(v)));
+ const value=changed?(sensor===2?4:2):Number($('auto_low').value);match.value=String(value);
+ if(changed){$('auto_low').value=String(value);$('auto_high').value=String(value);}
+ }else if(changed){$('auto_low').value='1';$('auto_high').value='20';}
+}
+for(const k of automationKeys)$('auto_'+k).onchange=()=>{if(k==='sensor')automationConditionEditor(true);automationDirty=true;$('automationSaveState').textContent='Unsaved changes';automationLock()};
+$('auto_match').onchange=()=>{$('auto_low').value=$('auto_match').value;$('auto_high').value=$('auto_match').value;automationDirty=true;$('automationSaveState').textContent='Unsaved changes';automationLock()};
+$('auto_slot').onchange=renderAutomationEditor;
+$('autoReload').onclick=async()=>{await fetchAutomation();if(!automationUncertain){renderAutomationEditor();$('automationSaveState').textContent='Saved rule reloaded'}};
+$('autoPreset').onclick=()=>{
+ const preset={enabled:false,sensor:1,low:1,high:20,gear:4,trigger:0,enterMs:0,exitMs:3000,action:255};
+ for(const k of automationKeys){const el=$('auto_'+k);if(k==='enabled')el.checked=false;else el.value=String(preset[k]);}
+ automationConditionEditor();automationDirty=true;$('automationSaveState').textContent='Preset loaded · enable the rule and save to activate';automationLock();
+};
+$('automationForm').onsubmit=async e=>{
+ e.preventDefault();if(automationBusy||automationUncertain||!automationSaved||!e.target.reportValidity())return;
+ const q=new URLSearchParams({slot:$('auto_slot').value});for(const k of automationKeys)q.set(k,k==='enabled'?($('auto_enabled').checked?'1':'0'):$('auto_'+k).value);
+ automationBusy=true;automationLock();$('automationSaveState').textContent='Saving…';
+ try{const r=await fetch('/api/automation/config?'+q,{method:'POST'});const s=await r.json();if(!r.ok)throw Error(s.error||'Save failed');automationSaved=automationResponse(s);automationDirty=false;renderAutomationEditor();renderAutomationLive(s);$('automationSaveState').textContent='Saved · waiting for a new sensor transition';}
+ catch(err){automationUncertain=true;$('automationSaveState').textContent=err.message+' · Reload saved rule before retrying.';}
+ finally{automationBusy=false;automationLock()}
+};
+automationLock();
+
 const convenienceBooleanKeys=['masterEnabled','kickdown','easyEntry','mirrorSync','rearBeltLeft','rearBeltCenter','rearBeltRight','reverseHazard','reverseFog','macrosEnabled'];
 const convenienceNumberKeys=['kickOnPct','kickOffPct','kickReleaseMode','debounceMs','clickGapMs','longPressMs'];
 function convenienceResponse(s){
@@ -2317,6 +2399,7 @@ function pollTick(force=false){
     else if(p==='panelDevice'||p==='panelDeviceDiag'||p==='panelPair')pollDue('s3',800,fetchS3,now,force);
     else if(p==='panelOta')pollDue('sys',2500,fetchSys,now,force);
     else if(p==='panelConvenience')pollDue('convenience',1000,fetchConvenience,now,force);
+    else if(p==='panelAutomation')pollDue('automation',1000,fetchAutomation,now,force);
     else if(p==='panelContinuousAp')pollDue('continuousAp',800,fetchContinuousAp,now,force);
     else if(p==='panelVisionControl')pollDue('visionControl',800,fetchVisionControlLab,now,force);
     else if(p==='panelLabR79ApControl')pollDue('r79ApControl',800,fetchR79ApControl,now,force);

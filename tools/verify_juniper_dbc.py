@@ -47,6 +47,8 @@ def verify(paths):
     for bus in sources:
         field(bus, 0x118, "DI_gear", 21, 3)
         field(bus, 0x118, "DI_accelPedalPos", 32, 8, .4)
+        field(bus, 0x257, "DI_vehicleSpeed", 43, 13, .08, -40)
+        assert sources[bus][2][(0x257, "DI_vehicleSpeed")][8191] == "SNA"
         field(bus, 0x257, "DI_uiSpeed", 24, 9)
         field(bus, 0x257, "DI_uiSpeedUnits", 33, 1)
         field(bus, 0x129, "SCCM_steeringAngle", 16, 14, .1, -819.2)
@@ -70,6 +72,9 @@ def verify(paths):
             0: "NONE", 1: "BUTTON", 2: "LOCK", 3: "UNLOCK", 4: "MISLOCK",
             5: "CRASH", 6: "CAR_ALARM", 7: "DAS", 8: "UDS"}
 
+    field("VEH", 0x353, "UI_cameraActive", 41, 1)
+    field("VEH", 0x294, "UI_fasciaCameraShown", 39, 1)
+    field("VEH", 0x3C2, "VCLEFT_swcCameraButtonState", 50, 2, mux="m1")
     field("VEH", 0x294, "UI_windowPercentageRequest", 42, 6, 5, sign="-")
     field("VEH", 0x294, "UI_windowRequest", 52, 3)
     for index, corner in enumerate(("FL", "FR", "RL", "RR")):

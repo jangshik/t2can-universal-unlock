@@ -102,4 +102,5 @@ int main(){
  assert(sent.size()==beforeRace&&!convenienceEngine.hazardThreeFlashActive());
  assert(post({{"slot0Action","54"}})==200);convenienceLoad();assert(convenienceMacroConfig.slots[0].action==54);
 
+ return 0;
 }

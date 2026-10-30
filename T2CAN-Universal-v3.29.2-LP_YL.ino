@@ -82,6 +82,7 @@
 #include "preheat_runtime.h"
 #include "convenience_runtime.h"
 #include "feature_actions_runtime.h"
+#include "automation_runtime.h"
 #include "web_api.h"
 #include "can_runtime.h"
 #include "can_usb_logger_task.h"
@@ -217,6 +218,7 @@ void setup() {
   canBusOffPersistenceLoad();
   preheatMenuLoad();
   convenienceLoad();
+  automationLoad();
   if (labMenuEnabled) {
     researchCaptureInit();
     driverMonitorCaptureInit();

@@ -12,7 +12,7 @@ Settings → **Convenience & Macros** contains persistent switches and gesture
 settings. All new convenience functions, including Easy Entry, default OFF.
 The CAN Transmission switch uses the existing persistent listen-only mode.
 S3XY BLE and steering macros share the feature action registry. Existing BLE
-IDs 0–13 are unchanged; new IDs 14–53 are append-only. Actions check support at
+IDs 0–13 are unchanged; new IDs 14–54 are append-only. Actions check support at
 execution time and use a bounded queue with one-second expiry.
 
 | Feature | Juniper Body + Chassis | Juniper Party + Chassis |
@@ -84,3 +84,9 @@ No flash or vehicle-operation test has been performed.
 Camera update: all 25 host test entrypoints passed again, plus the convenience
 browser suite on source and embedded artifacts and the full ESP32-S3 build.
 The original v261029_convenience tag predates this update.
+
+## Sensor automation update
+
+See [Automations](automations.md) for the sixteen-rule editor with independent persistent enable/disable toggles, low-speed camera
+ownership, sensor freshness and runtime cancellation behavior. Reverse Hazard
+now requires fresh BUTTON feedback before an automatic OFF request.
