@@ -5932,6 +5932,7 @@ static void webTask(void *arg) {
     server.on("/api/features/status", HTTP_GET, httpFeatureStatus);
     server.on("/api/feature-actions", HTTP_GET, httpFeatureActions);
     server.on("/api/convenience/config", HTTP_GET, httpConvenienceConfig);
+    server.on("/api/convenience/hazard-three-flash", HTTP_POST, httpConvenienceHazardThreeFlash);
     server.on("/api/lab/easy-entry/status", HTTP_GET, httpConvenienceWindowStatus);
     server.on("/api/lab/easy-entry/test", HTTP_POST, httpConvenienceWindowTest);
     server.on("/api/convenience/config", HTTP_POST, httpConvenienceUpdate);

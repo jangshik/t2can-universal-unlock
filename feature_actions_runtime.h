@@ -12,6 +12,7 @@ static bool featureActionLastOk = true;
 static uint32_t featureActionRejected = 0;
 
 static bool featureActionSupported(uint8_t action) {
+  if(action==FEATURE_ACTION_HAZARD_THREE_FLASH)return convenienceActionSupported(action);
   if ((action >= FEATURE_ACTION_MASTER && action <= FEATURE_ACTION_MACRO) || action == FEATURE_ACTION_MIRROR_SYNC)
     return convenienceActionSupported(action);
   if (!featureActionInfo(action))
@@ -72,6 +73,7 @@ static bool featureActionApplyNag(uint8_t action) {
 static bool featureActionExecute(uint8_t action) {
   // Recheck: a command queued under another profile or LAB state is stale.
   if(!featureActionSupported(action))return false;
+  if(action==FEATURE_ACTION_HAZARD_THREE_FLASH)return convenienceHazardThreeFlash();
   if((action>=FEATURE_ACTION_MASTER && action<=FEATURE_ACTION_MACRO)||action==FEATURE_ACTION_MIRROR_SYNC)return convenienceToggleAction(action);
   if(action<=S3XY_ACTION_BATTERY_PREHEAT){s3xyRunMappedAction(0,action,"Steering macro");return true;}
   switch(action) {

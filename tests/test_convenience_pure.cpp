@@ -63,6 +63,33 @@ static void reverse(){
  Fixture manual;manual.c.reverseHazard=true;manual.gear(1);manual.send(0x3F5,d);manual.gear(2);o=manual.send(0x3C2,d);manual.ack(o);d[0]=8;manual.send(0x3C2,d);assert(!manual.e.hazardOwned());d[0]=0;
  Fixture boot;boot.c.reverseHazard=true;boot.send(0x3F5,d);boot.gear(2);assert(boot.send(0x3C2,d).count==0); // no synthetic boot edge
 }
+static void hazardThreeFlash(){
+ Fixture f;uint8_t d[8]={};
+ auto seed=[](Fixture& x){uint8_t a[8]={};x.gear(4);x.send(0x3f5,a);x.send(0x3c2,a);};
+ assert(!f.e.requestHazardThreeFlash(f.now));seed(f);
+ assert(f.e.requestHazardThreeFlash(f.now));assert(!f.e.requestHazardThreeFlash(f.now));
+ auto o=f.send(0x3c2,d);assert(o.count==1&&o.frames[0].effect==3);f.ack(o);
+ // Repeated HIGH frames are one flash. Finish the third HIGH before OFF.
+ for(int flash=1;flash<=3;++flash){
+   for(int tick=0;tick<3;++tick){f.now+=100;f.gear(4);d[0]=0x1a;f.send(0x3f5,d);d[0]=0;f.ack(f.send(0x3c2,d));}
+   assert(f.e.hazardThreeFlashCount()==flash&&f.e.hazardOwned());
+   f.now+=100;f.gear(4);d[0]=0x15;f.send(0x3f5,d);d[0]=0;o=f.send(0x3c2,d);
+   if(flash<3)assert(o.count==0);else{assert(o.count==1&&o.frames[0].effect==4);f.ack(o);}
+ }
+ assert(!f.e.hazardThreeFlashActive()&&!f.e.hazardOwned());
+ f.now+=201;f.gear(4);f.send(0x3f5,d);assert(f.send(0x3c2,d).count==0);
+ Fixture manual;seed(manual);assert(manual.e.requestHazardThreeFlash(manual.now));manual.ack(manual.send(0x3c2,d));d[0]=8;manual.send(0x3c2,d);assert(!manual.e.hazardThreeFlashActive()&&!manual.e.hazardOwned());d[0]=0;
+ Fixture failed;seed(failed);assert(failed.e.requestHazardThreeFlash(failed.now));failed.ack(failed.send(0x3c2,d),false);failed.now+=201;failed.gear(4);assert(failed.send(0x3c2,d).count==0&&!failed.e.hazardThreeFlashActive());
+ Fixture busy;seed(busy);d[0]=0x15;busy.send(0x3f5,d);assert(!busy.e.requestHazardThreeFlash(busy.now));d[0]=0;
+ seed(busy);busy.gear(2);assert(!busy.e.requestHazardThreeFlash(busy.now));
+ Fixture stale;seed(stale);assert(stale.e.requestHazardThreeFlash(stale.now));stale.ack(stale.send(0x3c2,d));stale.now+=501;stale.gear(4);assert(!stale.e.hazardThreeFlashActive());assert(stale.send(0x3c2,d).count==0);
+ Fixture alarm;seed(alarm);assert(alarm.e.requestHazardThreeFlash(alarm.now));alarm.ack(alarm.send(0x3c2,d));d[0]=0x6a;alarm.send(0x3f5,d);d[0]=0;assert(!alarm.e.hazardThreeFlashActive()&&alarm.send(0x3c2,d).count==0);
+ Fixture reverse;reverse.c.reverseHazard=true;seed(reverse);assert(reverse.e.requestHazardThreeFlash(reverse.now));reverse.ack(reverse.send(0x3c2,d));reverse.gear(2);assert(!reverse.e.hazardThreeFlashActive()&&reverse.e.hazardOwned());
+ Fixture wrap;wrap.now=UINT32_MAX-50;seed(wrap);assert(wrap.e.requestHazardThreeFlash(wrap.now));wrap.now=10;wrap.ack(wrap.send(0x3c2,d));assert(wrap.e.hazardOwned());++wrap.epoch;wrap.send(0x3c2,d);assert(!wrap.e.hazardThreeFlashActive());
+ Fixture timeout;seed(timeout);assert(timeout.e.requestHazardThreeFlash(timeout.now));timeout.ack(timeout.send(0x3c2,d));
+ for(int tick=0;tick<61;++tick){timeout.now+=100;timeout.gear(4);d[0]=0x15;timeout.send(0x3f5,d);d[0]=0;timeout.ack(timeout.send(0x3c2,d));}
+ assert(!timeout.e.hazardThreeFlashActive()&&!timeout.e.hazardOwned());
+}
 static void setupEntry(Fixture& f){
  f.c.easyEntry=true;f.c.windowDropRaw=20;f.gear(1);uint8_t d[8]={};f.send(0x61D,d);f.send(0x294,d);f.send(0x273,d);d[0]=1;d[6]=0x12;f.send(0x2C2,d);d[0]=0;d[6]=0;d[2]=0x12;f.send(0x122,d);d[2]=0;f.send(0x102,d);
 }
@@ -99,4 +126,4 @@ static void gatesAndWrap(){
  f.gear(4,250);f.brake(1);assert(f.send(0x334,d).count==1);++f.epoch;assert(f.send(0x334,d).count==0);
  assert(f.send(0x334,nullptr).count==0);assert(f.send(0x334,d,9).count==0);
 }
-int main(){kickdown();belts();composedMux();reverse();easyEntry();dbcEntryAndTemplate();gatesAndWrap();std::puts("Convenience pure: kickdown, belt field isolation, reverse edges, window ownership, stale/epoch/gate/wrap PASS");}
+int main(){kickdown();belts();composedMux();reverse();hazardThreeFlash();easyEntry();dbcEntryAndTemplate();gatesAndWrap();std::puts("Convenience pure: kickdown, belt field isolation, reverse edges, window ownership, stale/epoch/gate/wrap PASS");}

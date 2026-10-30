@@ -26,7 +26,8 @@ enum FeatureAction : uint8_t {
   FEATURE_ACTION_PAUSE_STOPPED = 48, FEATURE_ACTION_TSL9_WINDOW = 49,
   FEATURE_ACTION_R79_MANUAL = 50, FEATURE_ACTION_R79_HW3 = 51,
   FEATURE_ACTION_R79_REINJECT1 = 52, FEATURE_ACTION_R79_REINJECT2 = 53,
-  FEATURE_ACTION_LAST = FEATURE_ACTION_R79_REINJECT2
+  FEATURE_ACTION_HAZARD_THREE_FLASH = 54,
+  FEATURE_ACTION_LAST = FEATURE_ACTION_HAZARD_THREE_FLASH
 };
 struct FeatureActionInfo { uint8_t id; const char *code; const char *label; };
 static constexpr FeatureActionInfo featureActions[] = {
@@ -57,7 +58,8 @@ static constexpr FeatureActionInfo featureActions[] = {
   {50,"r79_manual_toggle","R79 Allow Manual Driving"},
   {51,"r79_hw3_toggle","R79 HW3"},
   {52,"r79_reinject1_toggle","R79 Mode 1 Reinjection"},
-  {53,"r79_reinject2_toggle","R79 Mode 2 Reinjection"}
+  {53,"r79_reinject2_toggle","R79 Mode 2 Reinjection"},
+  {54,"hazard_three_flash","Hazard Light · 3 Flashes"}
 };
 static inline const FeatureActionInfo *featureActionInfo(uint8_t action) {
   for (const auto &item : featureActions) if (item.id == action) return &item;

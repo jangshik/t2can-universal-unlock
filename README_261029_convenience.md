@@ -18,6 +18,7 @@ CAN Transmission은 별도의 기존 송신 모드 설정을 사용합니다.
 | Easy Entry Window | P에서 닫힌 창문·도어 상태·건조 날씨·새 핸들 당김을 확인해 창문 내림 요청, 문 닫힘 전이 후 복귀 요청 | 지원, 기본 OFF | 미지원 |
 | Mirror Sync | 앞문 Easy Entry 동작에 맞춰 미러 펼침 요청 | 지원 | 미지원 |
 | Rear Belt Left / Center / Right | 후열 좌석별 착좌 상태에 따라 버클 OFF를 ON으로 변경. SNA/FAULT와 착좌 필드는 보존 | 지원 | 미지원 |
+| Hazard Light · 3 Flashes | 한 번 호출하면 좌우 점멸 요청을 3회 세고 OFF 요청. 대시보드·매크로·S3XY BLE에서 실행 | 지원 | 미지원 |
 | Reverse Hazard | 후진 진입·이탈 시 비상등 버튼 요청. 송신 성공 여부와 자동 제어 소유권 추적 | 지원 | 미지원 |
 | Reverse Rear Fog | 후진 중 후방 안개등 요청 | 지원 | 미지원 |
 | Custom Macros | 핸들 버튼 더블·트리플·롱 프레스에 기능 배정. 3개 슬롯과 시간 설정 | 지원 | 미지원 |
@@ -118,3 +119,13 @@ ARDUINO_CONFIG_FILE=/path/to/arduino.yaml \
 
 상세 자료: [기능 통합 검토](docs/convenience-port-review.md),
 [DBC 검토와 남은 확인 사항](docs/juniper-dbc-review.md).
+
+## Hazard Light · 3 Flashes
+
+Settings → Convenience & Macros → **Flash ×3**를 누르거나, 매크로/S3XY BLE 동작 목록에서 **Hazard Light · 3 Flashes**를 선택합니다. 액션 ID는 `54`, 키는 `hazard_three_flash`입니다. 한 번 실행하는 액션이며 ON/OFF 설정이나 자동 재실행을 저장하지 않습니다. Camera 버튼의 더블·트리플·롱클릭에도 할당할 수 있습니다.
+
+Juniper Body + Chassis, CAN 송신 허용, 신선한 기어·조명·비상등 버튼 수신이 필요합니다. 후진 중, 기존 비상등/방향지시등이 동작 중이거나 이미 실행 중이면 새 요청을 거절합니다. 통상 동작은 0x3C2 MUX 0의 비상등 버튼 비트로 켜고, 0x3F5 좌우 `indicator*Request`가 모두 ACTIVE_HIGH(2)인 상승을 세어 세 번째 ACTIVE_LOW(1)에서 끕니다. 같은 HIGH 프레임의 반복은 중복으로 세지 않습니다. 버튼 요청은 최대 200ms이며 요청 간격은 최소 1초입니다.
+
+수동 비상등 버튼, 차량 알람·충돌 등 다른 비상등 요청, 유효하지 않거나 오래된 수신, Listen Only 전환은 자동 제어를 취소합니다. Reverse Hazard를 켠 상태에서 실행 도중 R에 진입하면 이미 켠 비상등을 후진 기능에 넘기며, 이후 후진 이탈 시 끕니다. 6초 동안 점멸 완료를 확인하지 못하면 신선한 BUTTON 요청이 유지되는 경우에만 OFF를 시도합니다. 통신 단절이나 OFF 송신 실패 시 강제 종료는 보장되지 않으므로 차량 버튼으로 확인해야 합니다.
+
+DBC에서 요청 신호의 위치·ACTIVE_LOW/HIGH·비상등 요청 출처를 확인했고, 호스트 테스트로 중복 프레임·수동 개입·실패·타임아웃·후진 전환을 검증했습니다. 실제 램프의 3회 점멸과 종료 타이밍은 실차 검증 전입니다. 이 추가 기능은 기존 `v261029_convenience` 태그 이후 변경입니다.

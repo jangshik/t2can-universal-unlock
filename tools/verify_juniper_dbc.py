@@ -60,6 +60,16 @@ def verify(paths):
         field(bus, 0x334, "UI_powertrainControlChecksum", 56, 8)
         field(bus, 0x3F5, "VCFRONT_indicatorLeftInternal", 50, 2)
         field(bus, 0x3F5, "VCFRONT_indicatorRightInternal", 52, 2)
+        for name, start in (("VCFRONT_indicatorLeftRequest", 0), ("VCFRONT_indicatorRightRequest", 2)):
+            field(bus, 0x3F5, name, start, 2)
+            assert sources[bus][2][(0x3F5, name)] == {0: "OFF", 1: "ACTIVE_LOW", 2: "ACTIVE_HIGH"}
+        field(bus, 0x3F5, "VCFRONT_hazardLightRequest", 4, 4)
+        field(bus, 0x3F5, "VC_fastFlashHazardsActive", 49, 1)
+        assert sources[bus][1][0x3F5]["dlc"] == 8
+        assert sources[bus][2][(0x3F5, "VCFRONT_hazardLightRequest")] == {
+            0: "NONE", 1: "BUTTON", 2: "LOCK", 3: "UNLOCK", 4: "MISLOCK",
+            5: "CRASH", 6: "CAR_ALARM", 7: "DAS", 8: "UDS"}
+
     field("VEH", 0x294, "UI_windowPercentageRequest", 42, 6, 5, sign="-")
     field("VEH", 0x294, "UI_windowRequest", 52, 3)
     for index, corner in enumerate(("FL", "FR", "RL", "RR")):

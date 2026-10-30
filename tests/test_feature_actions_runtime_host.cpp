@@ -16,6 +16,7 @@ static bool profile=true,saveOk=true,vehicleProfileSetupMode=false,vehicleProfil
 static uint8_t activeVehicleProfile=2,activeVehicleTopology=2;
 static bool convenienceActionSupported(uint8_t a){return a==14||profile;}
 static std::vector<uint8_t> executed;
+static bool convenienceHazardThreeFlash(){executed.push_back(54);return true;}
 static bool convenienceToggleAction(uint8_t a){if(!saveOk)return false;executed.push_back(a);return true;}
 static bool s3xyActionSupportedForCurrentProfile(uint8_t a){return a<=13&&profile;}
 static void s3xyRunMappedAction(uint8_t,uint8_t a,const char*){executed.push_back(a);}
@@ -113,5 +114,7 @@ int main(){
  assert(!featureActionSupported(FEATURE_ACTION_AUTO_LANE_CHANGE));assert(featureActionExecute(FEATURE_ACTION_LAB));assert(featureActionSupported(FEATURE_ACTION_AUTO_LANE_CHANGE));
  assert(featureActionExecute(FEATURE_ACTION_AUTO_LANE_CHANGE)&&uiAutoLaneChangeEnabled);
  assert(featureActionEnqueue(FEATURE_ACTION_MASTER));featureActionClearPending();const auto count=executed.size();featureActionService();assert(executed.size()==count);
+ assert(featureActionExecute(FEATURE_ACTION_HAZARD_THREE_FLASH)&&executed.back()==54);
+ profile=false;assert(!featureActionSupported(FEATURE_ACTION_HAZARD_THREE_FLASH));
  for(const auto &action:featureActions){assert(featureActionInfo(action.id));assert(!featureActionCode(action.id)[0]==false);}
 }

@@ -1083,6 +1083,7 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="labControlRow"><div class="labControlTitle">Release condition</div><select disabled class="selectArrow labSelect" id="conv_kickReleaseMode" data-conv="kickReleaseMode" aria-label="Release condition"><option value="0">Pedal threshold</option><option value="1">Brake</option><option value="2">Pedal or brake</option></select></div>
 </section><div class="sectionhead"><div class="sectiontitle">Body controls</div></div><section class="card"><div class="settingToggleRow"><div><div class="listkey">Easy Entry Window</div><div class="listdesc">Lower a closed window when its door handle is pulled in Park.</div></div><label class="toggle"><input disabled id="conv_easyEntry" data-conv="easyEntry" type="checkbox"/><span class="track"></span></label></div>
 <div class="settingToggleRow"><div><div class="listkey">Mirror Sync</div><div class="listdesc">Unfold mirrors with Easy Entry on a front door.</div></div><label class="toggle"><input disabled id="conv_mirrorSync" data-conv="mirrorSync" type="checkbox"/><span class="track"></span></label></div>
+<div class="settingToggleRow"><div><div class="listkey">Hazard Light · 3 Flashes</div><div class="listdesc">Flash three times, then turn off. Also available as a macro or S3XY action.</div></div><button class="btn" id="hazardThreeFlashSend" disabled onclick="sendHazardThreeFlash()">Flash ×3</button></div><div class="softNote" id="hazardThreeFlashState" role="status" aria-live="polite">Waiting for vehicle status…</div>
 <div class="settingToggleRow"><div><div class="listkey">Reverse Hazard</div><div class="listdesc">Request hazard lights on entry to and exit from Reverse.</div></div><label class="toggle"><input disabled id="conv_reverseHazard" data-conv="reverseHazard" type="checkbox"/><span class="track"></span></label></div>
 <div class="settingToggleRow"><div><div class="listkey">Reverse Rear Fog</div><div class="listdesc">Request the rear fog light while Reverse is selected.</div></div><label class="toggle"><input disabled id="conv_reverseFog" data-conv="reverseFog" type="checkbox"/><span class="track"></span></label></div>
 </section><div class="sectionhead"><div class="sectiontitle">Rear seats</div></div><section class="card"><div class="settingToggleRow"><div><div class="listkey">Left rear belt</div><div class="listdesc">Seat-specific belt override</div></div><label class="toggle"><input disabled id="conv_rearBeltLeft" data-conv="rearBeltLeft" type="checkbox"/><span class="track"></span></label></div>
@@ -1490,6 +1491,7 @@ function convenienceResponse(s){
  if(!s||typeof s.supported!=='boolean'||convenienceBooleanKeys.some(k=>typeof s[k]!=='boolean')||convenienceNumberKeys.some(k=>!Number.isInteger(s[k]))||!Array.isArray(s.slots)||s.slots.length!==3||s.slots.some(v=>!v||!Number.isInteger(v.button)||!Number.isInteger(v.gesture)||!Number.isInteger(v.action)))throw new Error('Settings unavailable');return s;
 }
 const convenienceControl=createSettingsController({url:'/api/convenience/config',validate:convenienceResponse,render:renderConvenience,status:message=>$('convenienceSaveState').textContent=message});
+let hazardThreeFlashSending=false;
 function renderConvenience(s){
  const locked=convenienceControl.saving||convenienceControl.uncertain||!s;
  for(const el of document.querySelectorAll('[data-conv]')){const key=el.dataset.conv,slot=key.match(/^slot(\d)(Button|Gesture|Action)$/),value=slot?s?.slots?.[Number(slot[1])]?.[slot[2].toLowerCase()]:s?.[key];
@@ -1500,7 +1502,17 @@ function renderConvenience(s){
  $('convenienceSupport').textContent=!s?'Loading vehicle capabilities…':(s.masterEnabled?'CAN transmission enabled. ':'Listen-only · CAN transmission blocked. ')+(s.supported?'':'Body controls unavailable for this vehicle connection. ')+(s.easyEntrySupported===false?'Easy Entry requires Juniper Body + Chassis.':'');
  $('convenienceDesc').textContent=s?s.masterEnabled?'Transmission enabled · comfort and button settings':'Listen-only · CAN transmission blocked':'Transmission, comfort controls and steering-button actions.';
  $('convenienceBeltSupport').textContent=s?.seatbeltTxSupported===true?'Each seat is configured independently.':'Belt controls are unavailable for this configuration.';
+ $('hazardThreeFlashSend').disabled=locked||hazardThreeFlashSending||s?.hazardThreeFlashReady!==true;
+ if(!hazardThreeFlashSending)$('hazardThreeFlashState').textContent=s?.hazardThreeFlashActive===true?'Flashing · '+Number(s.hazardThreeFlashCount||0)+'/3':s?.hazardThreeFlashReady===true?'Ready · one-shot action':'Requires fresh idle lights, transmission enabled and a gear other than Reverse.';
  renderMacroActionOptions(s);
+}
+async function sendHazardThreeFlash(){
+ if(hazardThreeFlashSending||$('hazardThreeFlashSend').disabled)return;
+ hazardThreeFlashSending=true;renderConvenience(convenienceControl.saved);let failed=false;
+ $('hazardThreeFlashState').textContent='Requesting three flashes…';
+ try{await featurePostJson('/api/convenience/hazard-three-flash')}
+ catch(e){failed=true}
+ finally{hazardThreeFlashSending=false;await fetchConvenience();if(failed)$('hazardThreeFlashState').textContent='Request not confirmed · no automatic retry. Check vehicle lights before trying again.'}
 }
 function renderMacroActionOptions(s){
  const actions=s?.actions||featureActionRegistry;if(!Array.isArray(actions))return;

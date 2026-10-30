@@ -412,6 +412,62 @@
       ]
     },
     {
+      "bus": "VEH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorLeftRequest",
+      "definition": [
+        0,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorRightRequest",
+      "definition": [
+        2,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_hazardLightRequest",
+      "definition": [
+        4,
+        4,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "VEH",
+      "id": "0x3f5",
+      "signal": "VC_fastFlashHazardsActive",
+      "definition": [
+        49,
+        1,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
       "bus": "CH",
       "id": "0x334",
       "signal": "UI_pedalMap",
@@ -474,6 +530,62 @@
       "definition": [
         52,
         2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorLeftRequest",
+      "definition": [
+        0,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_indicatorRightRequest",
+      "definition": [
+        2,
+        2,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x3f5",
+      "signal": "VCFRONT_hazardLightRequest",
+      "definition": [
+        4,
+        4,
+        1,
+        "+",
+        1.0,
+        0.0,
+        null
+      ]
+    },
+    {
+      "bus": "CH",
+      "id": "0x3f5",
+      "signal": "VC_fastFlashHazardsActive",
+      "definition": [
+        49,
+        1,
         1,
         "+",
         1.0,

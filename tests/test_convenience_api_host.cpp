@@ -84,4 +84,22 @@ int main(){
  seed();beforeValidate=[](){uint8_t d[8]={};d[0]=0x5a;convenienceObserve(0,0x294,d,8,canTxBarrierState.epoch,now);};assert(testPost(valid)==200&&sent.back().data[0]==0x5a);beforeValidate=nullptr;
  httpConvenienceWindowStatus();assert(server.status==200&&server.body.find("doorAgeMs")!=String::npos);
 
+ // One-shot action has no persistent toggle and rejects stale/busy inputs.
+ convenienceResetUnderTxBarrier();
+ auto hazardSeed=[&](){uint8_t d[8]={};d[2]=0x80;convenienceObserve(0,0x118,d,8,canTxBarrierState.epoch,now);d[2]=0;convenienceObserve(0,0x3f5,d,8,canTxBarrierState.epoch,now);convenienceObserve(0,0x3c2,d,8,canTxBarrierState.epoch,now);};
+ server.query={};hazardSeed();const auto before=sent.size();
+ httpConvenienceHazardThreeFlash();assert(server.status==200&&sent.size()==before);
+ assert(convenienceEngine.hazardThreeFlashActive());
+ httpConvenienceHazardThreeFlash();assert(server.status==409);
+ convenienceResetUnderTxBarrier();hazardSeed();passive=true;httpConvenienceHazardThreeFlash();assert(server.status==409);passive=false;
+ bodySupported=false;httpConvenienceHazardThreeFlash();assert(server.status==409);bodySupported=true;
+ server.query={{"repeat","1"}};httpConvenienceHazardThreeFlash();assert(server.status==400);server.query={};
+ now+=501;httpConvenienceHazardThreeFlash();assert(server.status==409);
+ convenienceResetUnderTxBarrier();hazardSeed();assert(convenienceHazardThreeFlash());
+ const auto beforeRace=sent.size();
+ beforeValidate=[](){uint8_t d[8]={8};convenienceObserve(0,0x3c2,d,8,canTxBarrierState.epoch,now);};
+ uint8_t idle[8]={};convenienceObserve(0,0x3c2,idle,8,canTxBarrierState.epoch,now);beforeValidate=nullptr;
+ assert(sent.size()==beforeRace&&!convenienceEngine.hazardThreeFlashActive());
+ assert(post({{"slot0Action","54"}})==200);convenienceLoad();assert(convenienceMacroConfig.slots[0].action==54);
+
 }

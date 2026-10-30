@@ -48,12 +48,31 @@ class ConvenienceEngine {
   uint32_t windowAge(uint8_t corner,uint32_t now) const {return windowSeen_[corner]?now-windowMs_[corner]:UINT32_MAX;}
   bool kickdownActive() const { return kickApplied_; }
   bool hazardOwned() const { return hazardOwned_; }
+  bool hazardThreeFlashReady(uint32_t now) const {
+    return burst_==Burst::Idle&&!hazardOwned_&&!hazardRequest_&&!hazardPulse_&&
+      (!hazardPulseSeen_||uint32_t(now-hazardMs_)>=1000)&&
+      fresh(gearSeen_,gearMs_,now,500)&&gear_!=2&&
+      fresh(indicatorSeen_,indicatorMs_,now,500)&&lightingIdle_&&
+      fresh(hazardButtonSeen_,hazardButtonMs_,now,250)&&!hazardButtonPressed_;
+  }
+  bool requestHazardThreeFlash(uint32_t now) {
+    if(!hazardThreeFlashReady(now))return false;
+    burst_=Burst::Starting;burstMs_=now;burstCount_=0;burstHigh_=false;
+    hazardRequest_=true;hazardRequestedTarget_=true;return true;
+  }
+  bool hazardThreeFlashActive() const {return burst_!=Burst::Idle;}
+  uint8_t hazardThreeFlashCount() const {return burstCount_;}
+  bool hazardPulseValid(bool target,uint32_t now) const {
+    return hazardPulse_&&hazardTarget_==target&&!hazardButtonPressed_&&
+      uint32_t(now-hazardMs_)<200&&fresh(gearSeen_,gearMs_,now,500)&&
+      (burst_==Burst::Idle||fresh(indicatorSeen_,indicatorMs_,now,500));
+  }
   void acknowledge(const ConvenienceFrame& f,bool sent) {
     if(!sent)return;
     if(f.effect==1) { for(uint8_t i=0;i<4;++i)if(f.mask&(1u<<i))dropped_[i]=true; }
     if(f.effect==2) { for(uint8_t i=0;i<4;++i)if(f.mask&(1u<<i))dropped_[i]=false; }
-    if(f.effect==3)hazardOwned_=true;
-    if(f.effect==4)hazardOwned_=false;
+    if(f.effect==3&&hazardPulse_&&hazardTarget_){hazardOwned_=true;if(burst_==Burst::Starting)burst_=Burst::Counting;}
+    if(f.effect==4&&hazardPulse_&&!hazardTarget_){hazardOwned_=false;if(burst_==Burst::Stopping)burst_=Burst::Idle;}
   }
   ConvenienceOutput process(const ConvenienceConfig& c,uint16_t id,
       const uint8_t* d,uint8_t dlc,uint32_t now,uint32_t epoch,bool txAllowed) {
@@ -63,9 +82,17 @@ class ConvenienceEngine {
     if(!convenienceConfigValidPure(c)||!txAllowed){reset(epoch);return out;}
     // Loss of current drive inputs clears ownership instead of replaying stale
     // commands when the bus returns. Unsigned subtraction handles millis wrap.
-    if(!fresh(gearSeen_,gearMs_,now,500)){kickApplied_=false;hazardPulse_=false;hazardRequest_=false;hazardOwned_=false;gearSeen_=false;}
+    if(!fresh(gearSeen_,gearMs_,now,500)){kickApplied_=false;hazardPulse_=false;hazardRequest_=false;hazardOwned_=false;burst_=Burst::Idle;gearSeen_=false;}
     if(!c.kickdown)kickApplied_=false;
-    if(!c.reverseHazard){
+    if(burst_!=Burst::Idle){
+      // No stale replay or blind OFF toggle after loss of feedback.
+      if(!fresh(indicatorSeen_,indicatorMs_,now,500))cancelHazardBurst();
+      else if(uint32_t(now-burstMs_)>=6000){
+        if(burst_==Burst::Counting&&hazardReason_==1)stopHazardBurst();
+        else if(burst_!=Burst::Stopping)cancelHazardBurst();
+      }
+    }
+    if(!c.reverseHazard&&burst_==Burst::Idle){
       if(hazardOwned_){hazardRequest_=true;hazardRequestedTarget_=false;}
       else if(hazardRequest_&&hazardRequestedTarget_)hazardRequest_=false;
     }
@@ -74,6 +101,11 @@ class ConvenienceEngine {
       const uint8_t next=(d[2]>>5)&7;
       const bool valid=next>=1&&next<=4;
       const bool edge=gearSeen_&&valid&&gear_!=next;
+      if(c.reverseHazard&&edge&&next==2&&burst_!=Burst::Idle){
+        // Reverse takes over a successfully started burst; do not toggle OFF.
+        if(hazardOwned_){burst_=Burst::Idle;hazardRequest_=false;if(!hazardTarget_)hazardPulse_=false;}
+        else cancelHazardBurst();
+      }
       if(c.reverseHazard && edge && (next==2 || gear_==2)){
         const bool hazards=indicatorLeft_&&indicatorRight_;
         const bool canStart=next==2&&!hazardOwned_&&fresh(indicatorSeen_,indicatorMs_,now,500)&&!hazards;
@@ -89,7 +121,28 @@ class ConvenienceEngine {
     if(id==0x39D && dlc>=3){brake_=d[2]&3;brakeSeen_=brake_==1||brake_==2;brakeMs_=now;
       if(!brakeSeen_||(brake_==2&&c.kickReleaseMode!=0))kickApplied_=false;}
     if(id==0x61D&&dlc==8){wet_=(d[7]&3)!=0;weatherSeen_=true;weatherMs_=now;}
-    if(id==0x3F5&&dlc==8){indicatorLeft_=(d[6]>>2)&3;indicatorRight_=(d[6]>>4)&3;indicatorSeen_=indicatorLeft_<3&&indicatorRight_<3;indicatorMs_=now;}
+    if(id==0x3F5&&dlc==8){
+      indicatorLeft_=(d[6]>>2)&3;indicatorRight_=(d[6]>>4)&3;
+      indicatorSeen_=indicatorLeft_<3&&indicatorRight_<3;indicatorMs_=now;
+      // DBC VAL_: request 0 OFF, 1 ACTIVE_LOW, 2 ACTIVE_HIGH. Internal
+      // fields have no value table, so only request fields count flash edges.
+      const uint8_t left=d[0]&3,right=(d[0]>>2)&3;
+      hazardReason_=d[0]>>4;
+      lightingIdle_=left==0&&right==0&&hazardReason_==0&&(d[6]&0x3e)==0;
+      if(burst_!=Burst::Idle){
+        if(!indicatorSeen_||left==3||right==3||(d[6]&2)||hazardReason_>1)cancelHazardBurst();
+        else if(burst_==Burst::Starting&&!lightingIdle_)cancelHazardBurst();
+        else if(burst_==Burst::Counting){
+          if(hazardReason_==0){
+            if(burstCount_||uint32_t(now-burstMs_)>=1000)cancelHazardBurst();
+          }else{
+            const bool high=left==2&&right==2,low=left==1&&right==1;
+            if(high&&!burstHigh_){if(burstCount_<3)++burstCount_;burstHigh_=true;}
+            if(low&&burstHigh_){burstHigh_=false;if(burstCount_==3)stopHazardBurst();}
+          }
+        }else if(burst_==Burst::Stopping&&hazardReason_!=1)cancelHazardBurst();
+      }
+    }
     if((id==0x2C2||id==0x2C3)&&dlc==8&&(d[0]&1)==1){const uint8_t offset=id==0x2C2?0:1;
       window_[offset]=(d[6]>>1)&7;window_[offset+2]=(d[6]>>4)&7;
       windowSeen_[offset]=windowSeen_[offset+2]=true;windowMs_[offset]=windowMs_[offset+2]=now;}
@@ -134,10 +187,16 @@ class ConvenienceEngine {
     if(id==0x3C2&&(d[0]&1)==0){
       // A physical hazard-button request takes ownership away from automation.
       // The runtime removes recent local TX echoes before this observer.
-      if(d[0]&8){hazardOwned_=false;hazardPulse_=false;hazardRequest_=false;}
+      hazardButtonSeen_=true;hazardButtonMs_=now;hazardButtonPressed_=(d[0]&8)!=0;
+      if(hazardButtonPressed_)cancelHazardBurst();
       if(c.rearBeltLeft&&(d[7]&3)==2&&((d[6]>>4)&3)==1)f.data[6]=(f.data[6]&uint8_t(~0x30))|0x20;
       if(c.rearBeltCenter&&((d[6]>>6)&3)==2&&(d[7]>>6)==1)f.data[7]=(f.data[7]&uint8_t(~0xC0))|0x80;
-      if(hazardPulse_&&uint32_t(now-hazardMs_)>=200)hazardPulse_=false;
+      if(hazardPulse_&&uint32_t(now-hazardMs_)>=200){
+        hazardPulse_=false;
+        // Failed ON/OFF transmissions are not replayed as a later toggle.
+        if(burst_==Burst::Starting||burst_==Burst::Stopping)cancelHazardBurst();
+      }
+      if(burst_==Burst::Starting&&uint32_t(now-burstMs_)>=1000)cancelHazardBurst();
       if(hazardRequest_&&!hazardPulse_&&(!hazardPulseSeen_||uint32_t(now-hazardMs_)>=1000)){
         hazardTarget_=hazardRequestedTarget_;hazardRequest_=false;
         if(hazardTarget_!=hazardOwned_){hazardPulse_=true;hazardPulseSeen_=true;hazardMs_=now;}
@@ -156,6 +215,13 @@ class ConvenienceEngine {
     return out;
   }
  private:
+  enum class Burst:uint8_t {Idle,Starting,Counting,Stopping};
+  Burst burst_=Burst::Idle;
+  uint32_t burstMs_=0,hazardButtonMs_=0;
+  uint8_t burstCount_=0,hazardReason_=0;
+  bool burstHigh_=false,lightingIdle_=false,hazardButtonSeen_=false,hazardButtonPressed_=false;
+  void cancelHazardBurst(){burst_=Burst::Idle;hazardOwned_=false;hazardPulse_=false;hazardRequest_=false;}
+  void stopHazardBurst(){burst_=Burst::Stopping;hazardRequest_=true;hazardRequestedTarget_=false;}
   static bool fresh(bool seen,uint32_t at,uint32_t now,uint32_t limit){return seen&&uint32_t(now-at)<=limit;}
   void windowCommand(ConvenienceOutput& out,uint8_t type,uint8_t raw,uint8_t mask,uint8_t effect,uint32_t now){
     if(out.count>=4||raw>20||type>5||!fresh(windowTemplateSeen_,windowTemplateMs_,now,250)||

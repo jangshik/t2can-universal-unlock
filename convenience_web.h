@@ -30,6 +30,13 @@ static String convenienceJson() {
   for(unsigned n=0;n<3;++n){if(n)slots+=',';String item;JsonWriterArduino s(item);s.u32("button",m.slots[n].button);s.u32("gesture",uint8_t(m.slots[n].gesture));s.u32("action",m.slots[n].action);s.finish();slots+=item;}
   slots+=']';w.raw("slots",slots);w.raw("actions",featureActionsJsonArray());
   portENTER_CRITICAL(&convenienceMux);const uint32_t ok=convenienceTxOk,fail=convenienceTxFail;const bool active=convenienceEngine.kickdownActive();portEXIT_CRITICAL(&convenienceMux);
+  portENTER_CRITICAL(&convenienceMux);
+  const bool hazardReady=convenienceEngine.hazardThreeFlashReady(millis());
+  const bool hazardActive=convenienceEngine.hazardThreeFlashActive();
+  const uint8_t hazardFlashes=convenienceEngine.hazardThreeFlashCount();
+  portEXIT_CRITICAL(&convenienceMux);
+  w.boolean("hazardThreeFlashReady",hazardReady&&convenienceBodySupported()&&!canUsbTxHeld()&&!canTxAdministrativeHold&&mcpReady&&twaiReady);
+  w.boolean("hazardThreeFlashActive",hazardActive);w.u32("hazardThreeFlashCount",hazardFlashes);
   w.u32("txOk",ok);w.u32("txFail",fail);w.boolean("kickdownActive",active);w.finish();return out;
 }
 static void httpConvenienceConfig(){server.send(200,"application/json",convenienceJson());}
@@ -103,4 +110,10 @@ static void httpConvenienceWindowTest() {
   if(!valid||seen!=7||type<1||type>4||percent>100||percent%5||corner>3){server.send(400,"application/json","{\"error\":\"invalid test command\"}");return;}
   if(!convenienceWindowTest(type,percent,corner)){server.send(409,"application/json","{\"error\":\"Requires LAB, Juniper Body, transmission enabled, Park, fresh idle window frame and Easy Entry OFF\"}");return;}
   httpConvenienceWindowStatus();
+}
+
+static void httpConvenienceHazardThreeFlash() {
+  if(server.args()){server.send(400,"application/json","{\"error\":\"no arguments allowed\"}");return;}
+  if(!convenienceHazardThreeFlash()){server.send(409,"application/json","{\"error\":\"Requires Juniper Body, transmission enabled, fresh idle lights and released hazard button; unavailable in Reverse or while busy\"}");return;}
+  httpConvenienceConfig();
 }

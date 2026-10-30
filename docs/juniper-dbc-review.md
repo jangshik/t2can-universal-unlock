@@ -68,3 +68,11 @@ python3 tools/verify_juniper_dbc.py /path/to/Bayberry_VEH.dbc /path/to/Bayberry_
 이 도구는 위치·폭·바이트 순서·부호·스케일·MUX 및 일부 상태값을 검사한다.
 논리/브라우저/펌웨어 빌드 검증과 실제 창문·등화·경고 동작 검증은 별개다.
 최종 기능과 테스트 방법은 [통합 문서](convenience-port-review.md)를 참고한다.
+
+## 비상등 3회 액션 (추가 검증)
+
+- Body `0x3C2` / MUX 0 / bit 3: `VCLEFT_hazardButtonPressed`; 기존 프레임을 복사하고 버튼 비트만 요청합니다. 벨트 필드 변경과 한 프레임으로 합성됩니다.
+- Body `0x3F5` / bit 0 len 2, bit 2 len 2: `VCFRONT_indicatorLeftRequest`, `VCFRONT_indicatorRightRequest`. 제공 VEH DBC의 VAL_에 `0 OFF`, `1 ACTIVE_LOW`, `2 ACTIVE_HIGH`가 있습니다. 이 요청 신호의 좌우 HIGH → LOW 사이클을 셉니다. bit 50/52의 Internal 신호는 VAL_가 없으므로 점멸 계수에 쓰지 않습니다.
+- `0x3F5` bit 4 len 4 `VCFRONT_hazardLightRequest`: `0 NONE`, `1 BUTTON`, `2 LOCK`, `3 UNLOCK`, `4 MISLOCK`, `5 CRASH`, `6 CAR_ALARM`, `7 DAS`, `8 UDS`. BUTTON 이외의 활성 요청은 자동 제어를 취소합니다. bit 49 fast-flash도 자동 제어를 취소합니다.
+- CH에도 0x3F5 관측 신호는 있으나, 확인한 버튼 송신 경로는 VEH 0x3C2이므로 Party + Chassis에서는 액션을 제공하지 않습니다.
+- DBC는 물리 램프 동작이나 버튼 수신 수락을 보증하지 않습니다. 실제 점멸 주기/위상·세 번째 점멸 후 종료·수동 개입은 실차에서 확인해야 합니다.

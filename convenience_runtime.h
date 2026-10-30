@@ -30,6 +30,7 @@ static bool convenienceMacroSupported() {
 static bool convenienceActionSupported(uint8_t action) {
   if (action == FEATURE_ACTION_MASTER) return !vehicleProfileSetupMode && !vehicleProfileNvsError;
   if (action == FEATURE_ACTION_KICKDOWN) return convenienceKickdownSupported();
+  if (action == FEATURE_ACTION_HAZARD_THREE_FLASH) return convenienceBodySupported();
   if (action == FEATURE_ACTION_MACRO) return convenienceMacroSupported();
   if (action == FEATURE_ACTION_EASY_ENTRY || action == FEATURE_ACTION_MIRROR_SYNC)
     return convenienceBodySupported();
@@ -90,6 +91,17 @@ static bool convenienceApply(const ConvenienceConfig &c,const MacroGestureConfig
   }
   xSemaphoreGive(canTxBarrierMutex);return ok;
 }
+// One-shot action: never persisted, queued internally or replayed after reset.
+static bool convenienceHazardThreeFlash() {
+  if(!convenienceBodySupported()||canUsbTxHeld()||canTxAdministrativeHold||
+     canMaintenanceActive()||!mcpReady||!twaiReady||uint32_t(millis()-bootTime)<3000)return false;
+  if(!canTxBarrierMutex||xSemaphoreTake(canTxBarrierMutex,pdMS_TO_TICKS(500))!=pdTRUE)return false;
+  portENTER_CRITICAL(&convenienceMux);
+  const bool ok=convenienceEpoch==canTxBarrierState.epoch&&!canUsbTxHeld()&&!canTxAdministrativeHold&&
+    convenienceEngine.requestHazardThreeFlash(millis());
+  portEXIT_CRITICAL(&convenienceMux);
+  xSemaphoreGive(canTxBarrierMutex);return ok;
+}
 static bool convenienceToggleAction(uint8_t action) {
   if(!convenienceActionSupported(action))return false;
   if(action==FEATURE_ACTION_MASTER)return canUsbRequestMode(!canUsbPassive());
@@ -112,10 +124,16 @@ static bool conveniencePedalAvailable() {
   portENTER_CRITICAL(&pedalMapMux);const bool manual=pedalMapSession.active;portEXIT_CRITICAL(&pedalMapMux);
   return !manual&&!apDriveProfileGateOpen();
 }
-struct ConvenienceTxContext {uint32_t generation,rxMs;};
+struct ConvenienceTxContext {uint32_t generation,rxMs;uint8_t effect=0;};
 static bool convenienceValidateTx(struct can_frame *frame,void *context) {
   const auto &c=*static_cast<ConvenienceTxContext*>(context);
-  return convenienceBodySupported()&&!canUsbTxHeld()&&mcpReady&&twaiReady&&
+  bool hazardValid=true;
+  if(c.effect==3||c.effect==4){
+    portENTER_CRITICAL(&convenienceMux);
+    hazardValid=convenienceEngine.hazardPulseValid(c.effect==3,millis());
+    portEXIT_CRITICAL(&convenienceMux);
+  }
+  return hazardValid&&convenienceBodySupported()&&!canUsbTxHeld()&&mcpReady&&twaiReady&&
     c.generation==convenienceGeneration&&uint32_t(millis()-c.rxMs)<=50&&
     (frame->can_id!=0x334||conveniencePedalAvailable());
 }
@@ -164,7 +182,7 @@ static void convenienceObserve(uint8_t bus,uint16_t id,const uint8_t *data,uint8
   portEXIT_CRITICAL(&convenienceMux);
   for(uint8_t n=0;n<out.count;++n){
     const auto &f=out.frames[n];struct can_frame tx={};tx.can_id=f.id;tx.can_dlc=f.dlc;memcpy(tx.data,f.data,8);
-    ConvenienceTxContext ctx{generation,rxMs};MCP2515::ERROR error=MCP2515::ERROR_FAIL;
+    ConvenienceTxContext ctx{generation,rxMs,f.effect};MCP2515::ERROR error=MCP2515::ERROR_FAIL;
     bool sent=false;
     if(chassisKick){
       twai_message_t chassis={};chassis.identifier=f.id;chassis.data_length_code=f.dlc;memcpy(chassis.data,f.data,8);
