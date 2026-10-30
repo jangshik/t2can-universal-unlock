@@ -48,6 +48,8 @@ async function check(html,label){
   await page.waitForFunction(()=>convenienceControl.saved.kickdown===true&&!convenienceControl.saving);
   await page.locator('#conv_kickOnPct').fill('75');await page.locator('#conv_kickOnPct').dispatchEvent('change');
   await page.waitForFunction(()=>convenienceControl.saved.kickOnPct===75&&!convenienceControl.saving);
+  await page.locator('#conv_slot0Button').selectOption('8');
+  await page.waitForFunction(()=>convenienceControl.saved.slots[0].button===8&&!convenienceControl.saving);
   await page.locator('#conv_slot0Gesture').selectOption('3');
   await page.waitForFunction(()=>convenienceControl.saved.slots[0].gesture===3&&!convenienceControl.saving);
   await page.locator('#conv_slot0Action').selectOption('14');

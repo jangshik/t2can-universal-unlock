@@ -46,7 +46,9 @@ int main(){
  assert(post({{"unknown","1"}})==400);
  assert(post({{"kickOnPct","65536"}})==400);
  assert(post({{"slot0Button","9"}})==400);
- assert(post({{"slot0Button","8"}})==400); // Camera encoding is undefined in DBC
+ assert(post({{"slot0Button","8"}})==200); // User-confirmed staged button states
+ assert(convenienceMacroConfig.slots[0].button==8);
+ convenienceLoad();assert(convenienceMacroConfig.slots[0].button==8);
  assert(post({{"slot0Gesture","1"}})==400);
  assert(post({{"slot0Action","255"}})==400);
  assert(post({{"slot0Button","1"},{"slot0Gesture","3"},{"slot0Action","14"},{"macrosEnabled","1"}})==200);

@@ -28,7 +28,7 @@ static inline bool macroGestureConfigValidPure(const MacroGestureConfig &c) {
       c.freshnessMs < 100 || c.freshnessMs > 1000 ||
       c.debounceMs >= c.freshnessMs) return false;
   for (const auto &s : c.slots) {
-    if (s.button >= uint8_t(MacroButton::Count) || s.button == uint8_t(MacroButton::Camera) ||
+    if (s.button >= uint8_t(MacroButton::Count) ||
         (s.gesture != MacroGesture::Double && s.gesture != MacroGesture::Triple &&
          s.gesture != MacroGesture::Long)) return false;
   }
@@ -50,7 +50,6 @@ class MacroGestureEngine {
     lastRx_ = 0;
     head_ = count_ = 0;
   }
-  // Camera has no value table in the supplied DBC; its slot ID stays reserved.
   // For ordinary switches, 0 and 3 are unavailable/invalid two-bit values. A released switch
   // is 1, not 0; treating every nonzero value as pressed creates phantom clicks.
   void observe(uint16_t id, uint8_t dlc, const uint8_t *d, uint32_t now,
@@ -69,9 +68,11 @@ class MacroGestureEngine {
       uint8_t((d[2] >> 6) & 3), uint8_t(d[6] & 3),
       uint8_t((d[6] >> 2) & 3)
     };
-    // These two buttons use INACTIVE/SOFT_PRESS/HARD_PRESS/FAULT, not
+    // High beam/wiper (DBC) and Camera (user-confirmed) use
+    // INACTIVE/SOFT_PRESS/HARD_PRESS/FAULT, not
     // SNA/OFF/ON/FAULT. Soft -> hard is one continuous press.
-    for (uint8_t i = uint8_t(MacroButton::HighBeam); i <= uint8_t(MacroButton::Wiper); ++i)
+    const uint8_t stagedButtons[]={uint8_t(MacroButton::HighBeam),uint8_t(MacroButton::Wiper),uint8_t(MacroButton::Camera)};
+    for (uint8_t i : stagedButtons)
       values[i]=values[i]==0?1:(values[i]==3?0:2);
     for (uint8_t i = 0; i < uint8_t(MacroButton::Count); ++i)
       sample(i, values[i], now);

@@ -31,8 +31,8 @@ is preserved and the existing additive checksum is recomputed. Manual Pedal
 Response and AP drive-profile ownership take precedence.
 
 Three macro slots support double, triple and long presses with adjustable
-debounce, click gap and hold length. Eight buttons are selectable; Camera's ID
-is reserved because the supplied DBC has no value table. High beam and wiper
+debounce, click gap and hold length. Nine buttons are selectable. Camera uses the user-confirmed encoding
+0=inactive, 1=soft_press, 2=hard_press, 3=fault. Camera, high beam and wiper
 normalize inactive/soft/hard states separately from ordinary switches. Native
 button behavior remains active. Recovery, stale inputs and local TX echoes
 cannot create gestures.
@@ -69,14 +69,18 @@ See [DBC findings](juniper-dbc-review.md) and the reproducible
 thresholds, field/checksum preservation, macro timing, NVS failures, strict API
 parsing, stale/epoch/final-admission races and manual/automatic window controls.
 Browser tests exercise source and generated dashboard, including single-shot
-LAB sending and failure recovery. The generated dashboard is 94,629 gzip bytes.
+LAB sending and failure recovery. The generated dashboard is 94,618 gzip bytes.
 
 Firmware target: ESP32-S3, ESP32 Arduino core 3.3.11, autowp-mcp2515 1.3.1,
 16 MB flash, OPI PSRAM, `app3M_fat9M_16MB`, hardware CDC, loop/events on core 1.
 See `tools/build_convenience_firmware.sh` for the reproducible compile command.
 Validation completed: **10 native C++ binaries, 15 Python test entrypoints,
 and 3 browser suites passed**. Browser suites check both source and embedded
-artifacts. Full ESP32-S3 compile/link passed: program 1,598,691 / 3,145,728 bytes;
+artifacts. Full ESP32-S3 compile/link passed: program 1,598,735 / 3,145,728 bytes;
 static RAM 94,008 / 327,680 bytes. The cross-compiler exposed a macro-config
 brace-assignment incompatibility; explicit value initialization fixed it.
 No flash or vehicle-operation test has been performed.
+
+Camera update: all 25 host test entrypoints passed again, plus the convenience
+browser suite on source and embedded artifacts and the full ESP32-S3 build.
+The original v261029_convenience tag predates this update.

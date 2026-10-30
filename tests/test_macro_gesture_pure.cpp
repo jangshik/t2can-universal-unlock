@@ -1,5 +1,6 @@
 #include "../macro_gesture_pure.h"
 #include <assert.h>
+#include <initializer_list>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -53,19 +54,24 @@ int main() {
   // A held press is long once; its eventual release cannot complete a double.
   { Fixture f; f.click(); f.state(2); f.wait(900); assert(f.pop()==12);
     f.state(1); f.wait(500); f.empty(); }
-  { Fixture f;auto c=f.e.config();c.slots[0].button=8;assert(!f.e.configure(c)); }
-  // DBC: inactive=0; soft=1 and hard=2 both count as pressed. The
+  // DBC (high beam/wiper), user-confirmed (Camera): 0 inactive; 1/2 pressed. The
   // soft-to-hard transition must not create a second click.
-  for (uint8_t button=5;button<=6;++button) {
+  for (uint8_t button : {uint8_t(5),uint8_t(6),uint8_t(8)}) {
     Fixture f;auto c=f.e.config();c.slots[0]={button,MacroGesture::Double,20};
     c.slots[1]={button,MacroGesture::Triple,21};c.slots[2]={button,MacroGesture::Long,22};
-    assert(f.e.configure(c));const uint8_t byte=button==5?5:2;
-    auto state=[&](uint8_t v){f.d[byte]=(f.d[byte]&0x3f)|(v<<6);f.rx();};
+    assert(f.e.configure(c));const uint8_t byte=button==8?6:button==5?5:2;
+    const uint8_t shift=button==8?2:6;
+    auto state=[&](uint8_t v){f.d[byte]=(f.d[byte]&uint8_t(~(3u<<shift)))|(v<<shift);f.rx();};
     state(0);f.wait(40);f.wait(900);f.empty();
     for(int n=0;n<2;++n){state(1);f.wait(40);state(2);f.wait(40);state(0);f.wait(40);}
     f.wait(400);assert(f.pop()==20);f.empty();
     state(1);f.wait(800);assert(f.pop()==22);f.wait(400);f.empty();
     state(3);f.wait(40);state(0);f.wait(40);f.empty();
+    // Hard-only presses also form a triple; fault cancels a partial gesture.
+    for(int n=0;n<3;++n){state(2);f.wait(40);state(0);f.wait(40);}
+    assert(f.pop()==21);f.empty();
+    state(1);f.wait(40);state(0);f.wait(40);state(3);f.wait(40);state(0);f.wait(40);
+    state(1);f.wait(40);state(0);f.wait(400);f.empty();
   }
   puts("macro gestures: debounce, double/triple arbitration, long, stale, invalid, wrap PASS");
 }
