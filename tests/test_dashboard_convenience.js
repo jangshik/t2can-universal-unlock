@@ -11,7 +11,7 @@ async function check(html,label){
   const lab={ready:true,sent:0,lastTx:"00 00 00 00 00 50 11 00",states:Array.from({length:4},()=>({door:1,window:1,doorAgeMs:20,windowAgeMs:20}))};
   const actions=[{id:0,key:'none',label:'None',supported:true},{id:14,key:'master_toggle',label:'CAN Master / Listen Only',supported:true},{id:15,key:'kickdown_toggle',label:'Kickdown',supported:true}];
   actions.push({id:54,key:'hazard_three_flash',label:'Hazard Light · 3 Flashes',supported:true});
-  const config={hazardThreeFlashReady:true,hazardThreeFlashActive:false,hazardThreeFlashCount:0,supported:true,macroSupported:true,easyEntrySupported:true,seatbeltTxSupported:true,masterEnabled:true,kickdown:false,easyEntry:false,mirrorSync:false,rearBeltLeft:false,rearBeltCenter:false,rearBeltRight:false,reverseHazard:false,reverseFog:false,macrosEnabled:false,kickOnPct:90,kickOffPct:10,kickReleaseMode:2,debounceMs:30,clickGapMs:350,longPressMs:800,slots:Array.from({length:3},()=>({button:0,gesture:2,action:0})),actions};
+  const config={hazardThreeFlashReady:true,hazardThreeFlashActive:false,hazardThreeFlashCount:0,supported:true,macroSupported:true,easyEntrySupported:true,seatbeltTxSupported:true,masterEnabled:true,kickdown:false,easyEntry:false,mirrorSync:false,mirrorAutoReturn:false,mirrorReturnSpeedKph:20,mirrorReturnDelaySec:2,mirrorReturnState:0,rearBeltLeft:false,rearBeltCenter:false,rearBeltRight:false,reverseHazard:false,reverseFog:false,macrosEnabled:false,kickOnPct:90,kickOffPct:10,kickReleaseMode:2,debounceMs:30,clickGapMs:350,longPressMs:800,slots:Array.from({length:3},()=>({button:0,gesture:2,action:0})),actions};
   const automation={capacity:16,supported:true,running:true,nvsError:false,active:0,invalid:0,cameraState:0,actions:0,rejected:0,speedFresh:true,speedCenti:1000,gearFresh:true,gear:4,brakeFresh:true,brake:1,cameraFresh:true,cameraOn:false,featureActions:actions,rules:Array.from({length:16},()=>({enabled:false,sensor:1,low:1,high:20,gear:4,action:255,trigger:0,enterMs:0,exitMs:3000}))};
   const ap={enabled:false,method:0,supported:true,stalkSupported:false,scrollSingleSupported:true,scrollDoubleSupported:true};
   await page.route('http://convenience.test/**',async route=>{
@@ -55,6 +55,21 @@ async function check(html,label){
   await page.waitForFunction(()=>convenienceControl.saved.easyEntry===true&&!convenienceControl.saving);
   await page.locator('label:has(#conv_easyEntry)').click();
   await page.waitForFunction(()=>convenienceControl.saved.easyEntry===false&&!convenienceControl.saving);
+  assert.equal(await page.locator('#conv_mirrorReturnSpeedKph').inputValue(),'20');
+  assert.equal(await page.locator('#conv_mirrorReturnDelaySec').inputValue(),'2');
+  await page.locator('label:has(#conv_mirrorSync)').click();
+  await page.waitForFunction(()=>convenienceControl.saved.mirrorSync&&!convenienceControl.saving);
+  await page.locator('label:has(#conv_mirrorAutoReturn)').click();
+  await page.waitForFunction(()=>convenienceControl.saved.mirrorAutoReturn&&!convenienceControl.saving);
+  await page.locator('#conv_mirrorReturnSpeedKph').fill('25');await page.locator('#conv_mirrorReturnSpeedKph').dispatchEvent('change');
+  await page.waitForFunction(()=>convenienceControl.saved.mirrorReturnSpeedKph===25&&!convenienceControl.saving);
+  await page.locator('#conv_mirrorReturnDelaySec').fill('3');await page.locator('#conv_mirrorReturnDelaySec').dispatchEvent('change');
+  await page.waitForFunction(()=>convenienceControl.saved.mirrorReturnDelaySec===3&&!convenienceControl.saving);
+  config.mirrorReturnState=3;await page.evaluate(()=>fetchConvenience());
+  assert((await page.locator('#mirrorReturnStatus').textContent()).includes('armed · waiting'));
+  fail=true;await page.locator('label:has(#conv_mirrorAutoReturn)').click();
+  await page.waitForFunction(()=>!convenienceControl.saving&&convenienceControl.saved.mirrorAutoReturn);
+  assert(await page.locator('#conv_mirrorAutoReturn').isChecked());
   await page.locator('label:has(#conv_kickdown)').click();
   await page.waitForFunction(()=>convenienceControl.saved.kickdown===true&&!convenienceControl.saving);
   await page.locator('#conv_kickOnPct').fill('75');await page.locator('#conv_kickOnPct').dispatchEvent('change');
@@ -80,6 +95,8 @@ async function check(html,label){
   assert(!await page.locator('#conv_kickdown').isDisabled());
   assert(!await page.locator('#conv_kickOnPct').isDisabled());
   assert(await page.locator('#conv_macrosEnabled').isDisabled());
+  assert(await page.locator('#conv_mirrorAutoReturn').isDisabled());
+  assert(await page.locator('#conv_mirrorReturnSpeedKph').isDisabled());
   assert(!await page.locator('#conv_masterEnabled').isDisabled());
   body=true;await page.evaluate(()=>fetchConvenience());
   assert.equal(await page.locator('#continuousApAlgorithm').count(),0);

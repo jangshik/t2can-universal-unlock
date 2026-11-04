@@ -42,8 +42,8 @@ cannot create gestures.
 Enabling **Easy Entry Window** permits automatic transmission. In Park, a fresh
 closed-window status, assumed closed door, dry-weather observation and a new
 handle pull request 100% (raw20). After a successfully sent lowering request,
-the assumed open→closed door transition requests closing. **Mirror Sync** can
-request PRESENT on front-door entry. Original frame fields are preserved.
+the assumed open→closed door transition requests closing. **Easy Entry Mirror Fold** now uses a separate handle-driven RETRACT request
+with optional speed/time-based return; see [mirror behavior](easy-entry-mirrors.md). Original frame fields are preserved.
 The assumed door codes remain 1=closed / 4=open and require vehicle validation.
 There is no guessed STOP=6 transmission: releasing the handle does not stop
 window movement. Use the vehicle's window switch to interrupt movement.

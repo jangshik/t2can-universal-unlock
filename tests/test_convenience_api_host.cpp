@@ -64,6 +64,14 @@ int main(){
  bodySupported=true;activeVehicleTopology=VEHICLE_TOPOLOGY_STANDARD_BODY_CHASSIS;assert(post({{"rearBeltRight","1"}})==200);
  assert(post({{"easyEntry","1"}})==200); // user-controlled, default OFF
  httpFeatureActions();assert(server.status==200&&server.body.find("master_toggle")!=String::npos);
+ assert(post({{"mirrorSync","1"},{"mirrorAutoReturn","1"},{"mirrorReturnSpeedKph","25"},{"mirrorReturnDelaySec","3"}})==200);
+ assert(server.body.find("\"mirrorReturnSpeedKph\":25")!=String::npos);
+ convenienceLoad();assert(convenienceConfig.mirrorAutoReturn&&convenienceConfig.mirrorReturnDelaySec==3);
+ assert(post({{"mirrorReturnSpeedKph","4"}})==400);assert(post({{"mirrorReturnSpeedKph","51"}})==400);
+ assert(post({{"mirrorReturnDelaySec","0"}})==400);assert(post({{"mirrorReturnDelaySec","31"}})==400);
+ assert(post({{"mirrorAutoReturn","2"}})==400);
+ saveOk=false;assert(post({{"mirrorAutoReturn","0"}})==503&&convenienceConfig.mirrorAutoReturn);saveOk=true;
+ bodySupported=false;assert(post({{"mirrorAutoReturn","1"}})==409);bodySupported=true;
  // Real HTTP and runtime path: one-shot tests are separate from automatic entry.
  ConvenienceConfig testConfig;MacroGestureConfig testMacros;assert(convenienceApply(testConfig,testMacros));
  assert(!convenienceConfig.easyEntry);

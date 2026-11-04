@@ -30,7 +30,7 @@ CAN Transmission은 별도의 기존 송신 모드 설정을 사용합니다.
 | CAN Transmission | OFF로 두면 두 CAN 컨트롤러를 Listen Only로 전환 | 지원 | 지원 |
 | Kickdown | Chill 상태에서 설정한 페달 임계값을 넘으면 Sport 요청. 해제는 페달·브레이크·둘 중 하나 선택 | Body 경로 | Chassis 경로 |
 | Easy Entry Window | P에서 닫힌 창문·도어 상태·건조 날씨·새 핸들 당김을 확인해 창문 내림 요청, 문 닫힘 전이 후 복귀 요청 | 지원, 기본 OFF | 미지원 |
-| Mirror Sync | 앞문 Easy Entry 동작에 맞춰 미러 펼침 요청 | 지원 | 미지원 |
+| Easy Entry Mirror Fold / Auto Return | P·정지 상태에서 앞문 손잡이를 당기면 접기. 장치가 접은 경우에만 D에서 설정 속도·시간 충족 후 복귀 | 지원, 기본 OFF | 미지원 |
 | Rear Belt Left / Center / Right | 후열 좌석별 착좌 상태에 따라 버클 OFF를 ON으로 변경. SNA/FAULT와 착좌 필드는 보존 | 지원 | 미지원 |
 | Hazard Light · 3 Flashes | 한 번 호출하면 좌우 점멸 요청을 3회 세고 OFF 요청. 대시보드·매크로·S3XY BLE에서 실행 | 지원 | 미지원 |
 | Reverse Hazard | 후진 진입·이탈 시 비상등 버튼 요청. 송신 성공 여부와 자동 제어 소유권 추적 | 지원 | 미지원 |
@@ -63,6 +63,20 @@ S3XY BLE와 매크로는 공통 기능 목록을 사용합니다. 신규 편의 
 대시보드의 전역 기능 토글도 배정할 수 있으며 차량 프로필·연결별 지원 조건을
 적용합니다. 기존 BLE 액션 ID 0–13은 유지하고 새 ID 14–54을 추가했습니다.
 Bluetooth 자체를 끄면 BLE 버튼이 연결 해제되므로 대시보드에서 다시 켜야 합니다.
+
+## Easy Entry 미러 접기 및 자동 복귀
+
+Settings → Convenience & Macros에서 **Easy Entry Mirror Fold**와 **Mirror Auto Return**을
+각각 ON/OFF할 수 있습니다. 창문 기능과 독립적으로 동작하며 기본값은 둘 다 OFF입니다.
+자동 복귀는 기본 **20 km/h 이상 2초 유지**, 속도 5–50 km/h와 시간 1–30초를 설정합니다.
+D/R 변속이나 문 닫힘만으로는 펼치지 않습니다. 자동 복귀는 전진 D에서만 가능합니다.
+
+원래 양쪽 모두 펼쳐져 있었고 장치의 접기 요청 후 실제 양쪽 접힘까지 확인했을 때만
+복귀를 허용합니다. 이미 접힌 미러, 수동/외부 요청, 상태 불일치, 수신 단절은 자동
+복귀 대상에서 제외합니다. 설정은 재부팅 후 유지하지만 **자동 복귀 권한은 해제**하며,
+필요하면 차량에서 직접 펼치면 됩니다. 이전 Mirror Sync ON 설정도 새 접기 동작으로
+자동 전환하지 않고 OFF로 마이그레이션합니다. 차량 자체의 펼침 기능은 별개입니다.
+자세한 조건과 검증 범위는 [미러 동작 문서](docs/easy-entry-mirrors.md)를 참고하세요.
 
 ## Easy Entry 사용 및 LAB 테스트
 

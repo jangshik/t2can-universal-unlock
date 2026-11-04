@@ -46,7 +46,7 @@ static constexpr FeatureActionInfo featureActions[] = {
   {36,"s3xy_auto_toggle","S3XY Auto Connect"}, {37,"auto_lane_change_toggle","Auto Lane Change"},
   {38,"summon_heartbeat_toggle","Summon Heartbeat"}, {39,"tlssc_highway_toggle","TLSSC Highway Block"},
   {40,"tlssc_noa_toggle","TLSSC NOA Block"},
-  {41,"mirror_sync_toggle","Easy Entry Mirror Sync"},
+  {41,"mirror_sync_toggle","Easy Entry Mirror Fold"},
   {42,"bluetooth_toggle","Bluetooth Master"},
   {43,"actions_menu_toggle","Actions Menu"},
   {44,"confirm_free_toggle","Confirm-Free Lane Change"},

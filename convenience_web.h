@@ -22,6 +22,7 @@ static String convenienceJson() {
   w.boolean("easyEntrySupported",convenienceActionSupported(FEATURE_ACTION_EASY_ENTRY));
   w.boolean("seatbeltTxSupported",convenienceBodySupported());w.boolean("nvsError",convenienceNvsError);
   w.boolean("kickdown",c.kickdown);w.boolean("easyEntry",c.easyEntry);w.boolean("mirrorSync",c.mirrorSync);
+  w.boolean("mirrorAutoReturn",c.mirrorAutoReturn);w.u32("mirrorReturnSpeedKph",c.mirrorReturnSpeedKph);w.u32("mirrorReturnDelaySec",c.mirrorReturnDelaySec);
   w.boolean("rearBeltLeft",c.rearBeltLeft);w.boolean("rearBeltCenter",c.rearBeltCenter);w.boolean("rearBeltRight",c.rearBeltRight);
   w.boolean("reverseHazard",c.reverseHazard);w.boolean("reverseFog",c.reverseFog);
   w.u32("kickOnPct",c.kickOnPct);w.u32("kickOffPct",c.kickOffPct);w.u32("kickReleaseMode",c.kickReleaseMode);
@@ -31,17 +32,20 @@ static String convenienceJson() {
   slots+=']';w.raw("slots",slots);w.raw("actions",featureActionsJsonArray());
   portENTER_CRITICAL(&convenienceMux);const uint32_t ok=convenienceTxOk,fail=convenienceTxFail;const bool active=convenienceEngine.kickdownActive();portEXIT_CRITICAL(&convenienceMux);
   portENTER_CRITICAL(&convenienceMux);
+  const uint8_t mirrorState=convenienceEngine.mirrorReturnState();
+  const uint8_t mirrorLeft=convenienceEngine.observedMirror(0,millis()),mirrorRight=convenienceEngine.observedMirror(1,millis());
   const bool hazardReady=convenienceEngine.hazardThreeFlashReady(millis());
   const bool hazardActive=convenienceEngine.hazardThreeFlashActive();
   const uint8_t hazardFlashes=convenienceEngine.hazardThreeFlashCount();
   portEXIT_CRITICAL(&convenienceMux);
+  w.u32("mirrorReturnState",mirrorState);w.u32("mirrorLeftState",mirrorLeft);w.u32("mirrorRightState",mirrorRight);
   w.boolean("hazardThreeFlashReady",hazardReady&&convenienceBodySupported()&&!canUsbTxHeld()&&!canTxAdministrativeHold&&mcpReady&&twaiReady);
   w.boolean("hazardThreeFlashActive",hazardActive);w.u32("hazardThreeFlashCount",hazardFlashes);
   w.u32("txOk",ok);w.u32("txFail",fail);w.boolean("kickdownActive",active);w.finish();return out;
 }
 static void httpConvenienceConfig(){server.send(200,"application/json",convenienceJson());}
 static void httpConvenienceUpdate() {
-  if(server.args()<1||server.args()>25){server.send(400,"application/json","{\"error\":\"invalid arguments\"}");return;}
+  if(server.args()<1||server.args()>32){server.send(400,"application/json","{\"error\":\"invalid arguments\"}");return;}
   ConvenienceConfig c;MacroGestureConfig m;convenienceSnapshot(c,m);
   bool valid=true,unsupported=false,master=false,masterValue=false;
   for(int n=0;n<server.args()&&valid;++n){
@@ -53,6 +57,7 @@ static void httpConvenienceUpdate() {
     if(key=="kickdown"){flag=&c.kickdown;needsKickdown=true;}
     else if(key=="easyEntry"){flag=&c.easyEntry;}
     else if(key=="mirrorSync"){flag=&c.mirrorSync;}
+    else if(key=="mirrorAutoReturn"){flag=&c.mirrorAutoReturn;}
     else if(key=="rearBeltLeft")flag=&c.rearBeltLeft;
     else if(key=="rearBeltCenter")flag=&c.rearBeltCenter;
     else if(key=="rearBeltRight")flag=&c.rearBeltRight;
@@ -62,7 +67,9 @@ static void httpConvenienceUpdate() {
     if(flag){
       if(v>1){valid=false;break;}*flag=v==1;
       if(v&&(!(needsKickdown?convenienceKickdownSupported():(needsBody?convenienceBodySupported():convenienceMacroSupported()))))unsupported=true;
-    }else if(key=="kickOnPct"){if(v>100)valid=false;else c.kickOnPct=v;}
+    }else if(key=="mirrorReturnSpeedKph"){if(v<5||v>50)valid=false;else c.mirrorReturnSpeedKph=v;}
+    else if(key=="mirrorReturnDelaySec"){if(v<1||v>30)valid=false;else c.mirrorReturnDelaySec=v;}
+    else if(key=="kickOnPct"){if(v>100)valid=false;else c.kickOnPct=v;}
     else if(key=="kickOffPct"){if(v>99)valid=false;else c.kickOffPct=v;}
     else if(key=="kickReleaseMode"){if(v>2)valid=false;else c.kickReleaseMode=v;}
     else if(key=="debounceMs")m.debounceMs=v;

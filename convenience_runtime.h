@@ -42,7 +42,8 @@ static void convenienceSnapshot(ConvenienceConfig &c, MacroGestureConfig &m) {
 // Explicit versioned wire format: no compiler padding or bool representation
 // in NVS. A single committed blob prevents partially saved gesture mappings.
 static void convenienceEncode(const ConvenienceConfig &c,const MacroGestureConfig &m,uint8_t b[32]) {
-  memset(b,0,32); b[0]=1;
+  memset(b,0,32); b[0]=2;
+  b[23]=c.mirrorAutoReturn;b[24]=c.mirrorReturnSpeedKph;b[25]=c.mirrorReturnDelaySec;
   const bool flags[]={c.kickdown,c.easyEntry,c.mirrorSync,c.rearBeltLeft,c.rearBeltCenter,c.rearBeltRight,c.reverseHazard,c.reverseFog};
   for(unsigned n=0;n<8;++n)if(flags[n])b[1]|=1u<<n;
   b[2]=c.kickOnPct;b[3]=c.kickOffPct;b[4]=c.kickReleaseMode;b[5]=m.enabled;
@@ -51,10 +52,14 @@ static void convenienceEncode(const ConvenienceConfig &c,const MacroGestureConfi
   for(unsigned n=0;n<3;++n){b[14+3*n]=m.slots[n].button;b[15+3*n]=uint8_t(m.slots[n].gesture);b[16+3*n]=m.slots[n].action;}
 }
 static bool convenienceDecode(const uint8_t b[32],ConvenienceConfig &c,MacroGestureConfig &m) {
-  if(b[0]!=1||b[5]>1)return false;
-  for(unsigned n=23;n<32;++n)if(b[n])return false;
+  if((b[0]!=1&&b[0]!=2)||b[5]>1)return false;
+  for(unsigned n=b[0]==1?23:26;n<32;++n)if(b[n])return false;
+  if(b[0]==2&&b[23]>1)return false;
   bool* flags[]={&c.kickdown,&c.easyEntry,&c.mirrorSync,&c.rearBeltLeft,&c.rearBeltCenter,&c.rearBeltRight,&c.reverseHazard,&c.reverseFog};
   for(unsigned n=0;n<8;++n)*flags[n]=(b[1]&(1u<<n))!=0;
+  // v1 Mirror Sync unfolded on entry. Never silently enable the new folding behavior.
+  if(b[0]==1){c.mirrorSync=false;c.mirrorAutoReturn=false;c.mirrorReturnSpeedKph=20;c.mirrorReturnDelaySec=2;}
+  else {c.mirrorAutoReturn=b[23];c.mirrorReturnSpeedKph=b[24];c.mirrorReturnDelaySec=b[25];}
   c.kickOnPct=b[2];c.kickOffPct=b[3];c.kickReleaseMode=b[4];m.enabled=b[5];
   uint16_t* timings[]={&m.debounceMs,&m.clickGapMs,&m.longPressMs,&m.freshnessMs};
   for(unsigned n=0;n<4;++n)*timings[n]=uint16_t(b[6+2*n])|(uint16_t(b[7+2*n])<<8);
@@ -75,6 +80,7 @@ static void convenienceLoad() {
   if(convenienceNvsError){c=ConvenienceConfig{};m=MacroGestureConfig{};}
   portENTER_CRITICAL(&convenienceMux);
   convenienceConfig=c;convenienceMacroConfig=m;convenienceMacros.configure(m);
+  convenienceEngine.reset(convenienceEpoch);convenienceEngine.configureMirrors(c);
   portEXIT_CRITICAL(&convenienceMux);
 }
 static bool convenienceApply(const ConvenienceConfig &c,const MacroGestureConfig &m) {
@@ -85,6 +91,7 @@ static bool convenienceApply(const ConvenienceConfig &c,const MacroGestureConfig
   if(ok){
     portENTER_CRITICAL(&convenienceMux);
     convenienceConfig=c;convenienceMacroConfig=m;convenienceNvsError=false;
+    convenienceEngine.configureMirrors(c);
     ++convenienceGeneration;convenienceMacros.configure(m);
     portEXIT_CRITICAL(&convenienceMux);
     featureActionClearPending();
@@ -131,6 +138,11 @@ static bool convenienceValidateTx(struct can_frame *frame,void *context) {
   if(c.effect==3||c.effect==4){
     portENTER_CRITICAL(&convenienceMux);
     hazardValid=convenienceEngine.hazardPulseValid(c.effect==3,millis());
+    portEXIT_CRITICAL(&convenienceMux);
+  }
+  if(c.effect==5||c.effect==6){
+    portENTER_CRITICAL(&convenienceMux);
+    hazardValid=convenienceEngine.prepareMirrorTx(c.effect,millis(),frame->data);
     portEXIT_CRITICAL(&convenienceMux);
   }
   return hazardValid&&convenienceBodySupported()&&!canUsbTxHeld()&&mcpReady&&twaiReady&&

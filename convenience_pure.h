@@ -7,6 +7,8 @@
 // routing, profile support and final transport admission remain runtime duties.
 struct ConvenienceConfig {
   bool kickdown=false, easyEntry=false, mirrorSync=false;
+  bool mirrorAutoReturn=false;
+  uint8_t mirrorReturnSpeedKph=20, mirrorReturnDelaySec=2;
   bool rearBeltLeft=false, rearBeltCenter=false, rearBeltRight=false;
   bool reverseHazard=false, reverseFog=false;
   uint8_t kickOnPct=90, kickOffPct=10;
@@ -17,7 +19,8 @@ struct ConvenienceConfig {
   uint8_t kickReleaseMode=2;
 };
 static inline bool convenienceConfigValidPure(const ConvenienceConfig& c) {
-  return c.kickOnPct<=100 && c.kickOnPct>c.kickOffPct && c.kickReleaseMode<=2;
+  return c.mirrorReturnSpeedKph>=5 && c.mirrorReturnSpeedKph<=50 &&
+    c.mirrorReturnDelaySec>=1 && c.mirrorReturnDelaySec<=30 && c.kickOnPct<=100 && c.kickOnPct>c.kickOffPct && c.kickReleaseMode<=2;
 }
 struct ConvenienceFrame {
   uint16_t id=0;
@@ -29,9 +32,17 @@ struct ConvenienceOutput {
   uint8_t count=0;
   ConvenienceFrame frames[4];
 };
+#include "easy_entry_mirror_pure.h"
+
 class ConvenienceEngine {
  public:
   void reset(uint32_t epoch) { *this=ConvenienceEngine(); epoch_=epoch; }
+  void configureMirrors(const ConvenienceConfig& c) {
+    mirrors_.configure({c.mirrorSync,c.mirrorAutoReturn,c.mirrorReturnSpeedKph,c.mirrorReturnDelaySec});
+  }
+  uint8_t mirrorReturnState() const { return mirrors_.state(); }
+  uint8_t observedMirror(uint8_t side,uint32_t now) const { return mirrors_.observed(side,now); }
+  bool prepareMirrorTx(uint8_t effect,uint32_t now,uint8_t* data) { return mirrors_.prepare(effect,now,data); }
   bool windowTestReady(uint32_t now) const {
     return fresh(gearSeen_,gearMs_,now,500)&&gear_==1&&
       fresh(windowTemplateSeen_,windowTemplateMs_,now,250)&&(windowTemplate_[6]&0x70)==0;
@@ -69,6 +80,7 @@ class ConvenienceEngine {
       (target?(hazardReason_<=1&&(burst_!=Burst::Idle||gear_==2)):hazardReason_==1);
   }
   void acknowledge(const ConvenienceFrame& f,bool sent) {
+    if(f.effect==5||f.effect==6)mirrors_.acknowledge(f.effect,sent);
     if(!sent)return;
     if(f.effect==1) { for(uint8_t i=0;i<4;++i)if(f.mask&(1u<<i))dropped_[i]=true; }
     if(f.effect==2) { for(uint8_t i=0;i<4;++i)if(f.mask&(1u<<i))dropped_[i]=false; }
@@ -81,6 +93,10 @@ class ConvenienceEngine {
     if(epoch!=epoch_)reset(epoch);
     if(!d||dlc>8)return out;
     if(!convenienceConfigValidPure(c)||!txAllowed){reset(epoch);return out;}
+    configureMirrors(c);
+    ConvenienceFrame mirrorFrame;
+    mirrorFrame.effect=mirrors_.observe(id,d,dlc,now,mirrorFrame.data);
+    if(mirrorFrame.effect){mirrorFrame.id=0x273;out.frames[out.count++]=mirrorFrame;}
     // Loss of current drive inputs clears ownership instead of replaying stale
     // commands when the bus returns. Unsigned subtraction handles millis wrap.
     if(!fresh(gearSeen_,gearMs_,now,500)){kickApplied_=false;hazardPulse_=false;hazardRequest_=false;hazardOwned_=false;burst_=Burst::Idle;gearSeen_=false;}
@@ -154,7 +170,6 @@ class ConvenienceEngine {
       window_[offset]=(d[6]>>1)&7;window_[offset+2]=(d[6]>>4)&7;
       windowSeen_[offset]=windowSeen_[offset+2]=true;windowMs_[offset]=windowMs_[offset+2]=now;}
     if(id==0x294&&dlc==8){memcpy(windowTemplate_,d,8);windowTemplateSeen_=true;windowTemplateMs_=now;}
-    if(id==0x273&&dlc==8){memcpy(mirrorTemplate_,d,8);mirrorTemplateSeen_=true;mirrorTemplateMs_=now;}
     const bool parked=fresh(gearSeen_,gearMs_,now,500)&&gear_==1;
     if(!parked)memset(dropped_,0,sizeof(dropped_));
     if((id==0x122||id==0x123)&&dlc==8&&(d[0]&1)==0){const uint8_t offset=id==0x122?0:1;
@@ -170,7 +185,6 @@ class ConvenienceEngine {
         if(c.easyEntry&&c.windowDropRaw<=20&&parked&&doorClosed&&fresh(handleSeen_[i],handleMs_[i],now,500)){
           if(value&&!handle_[i]&&windowClosed&&fresh(weatherSeen_,weatherMs_,now,2000)&&!wet_){
             windowCommand(out,1,c.windowDropRaw,1u<<i,1,now);
-            if(out.count&&c.mirrorSync&&i<2&&out.count<4&&fresh(mirrorTemplateSeen_,mirrorTemplateMs_,now,250)&&(mirrorTemplate_[3]&3)==0){auto &f=out.frames[out.count++];f.id=0x273;memcpy(f.data,mirrorTemplate_,8);f.data[3]=(f.data[3]&0xfc)|2;}
           }
           // Request 6 is undefined in the supplied DBC. No guessed STOP TX.
         }
@@ -223,6 +237,7 @@ class ConvenienceEngine {
     return out;
   }
  private:
+  EasyEntryMirrorEngine mirrors_;
   enum class Burst:uint8_t {Idle,Starting,Counting,Stopping};
   Burst burst_=Burst::Idle;
   uint32_t burstMs_=0,hazardButtonMs_=0;
@@ -238,9 +253,9 @@ class ConvenienceEngine {
     memcpy(f.data,windowTemplate_,8);
     f.data[5]=(f.data[5]&3)|(raw<<2);f.data[6]=(f.data[6]&0x80)|(mask&15)|((type&7)<<4);f.mask=mask;f.effect=effect;
   }
-  uint8_t windowTemplate_[8]={},mirrorTemplate_[8]={};
-  bool windowTemplateSeen_=false,mirrorTemplateSeen_=false;
-  uint32_t windowTemplateMs_=0,mirrorTemplateMs_=0;
+  uint8_t windowTemplate_[8]={};
+  bool windowTemplateSeen_=false;
+  uint32_t windowTemplateMs_=0;
   uint32_t epoch_=0,gearMs_=0,accelMs_=0,brakeMs_=0,weatherMs_=0,indicatorMs_=0,hazardMs_=0;
   uint8_t gear_=0,accel_=0,brake_=0,indicatorLeft_=0,indicatorRight_=0;
   bool gearSeen_=false,accelSeen_=false,brakeSeen_=false,weatherSeen_=false,indicatorSeen_=false;

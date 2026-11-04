@@ -48,7 +48,7 @@
 | 38 | Summon Heartbeat |
 | 39 | TLSSC Highway Block |
 | 40 | TLSSC NOA Block |
-| 41 | Easy Entry Mirror Sync |
+| 41 | Easy Entry Mirror Fold |
 | 42 | Bluetooth Master |
 | 43 | Actions Menu |
 | 44 | Confirm-Free Lane Change |

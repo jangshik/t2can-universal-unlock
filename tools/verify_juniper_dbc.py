@@ -85,7 +85,16 @@ def verify(paths):
     for ident, prefix in ((0x122, "VCLEFT"), (0x123, "VCRIGHT")):
         field("VEH", ident, prefix + "_frontDoorState", 17, 3, mux="m0")
         field("VEH", ident, prefix + "_rearDoorState", 20, 3, mux="m0")
+    for ident, prefix in ((0x102, "VCLEFT"), (0x103, "VCRIGHT")):
+        field("VEH", ident, prefix + "_frontHandlePulled", 10, 1)
+        field("VEH", ident, prefix + "_mirrorFoldState", 52, 3)
+        assert sources["VEH"][1][ident]["dlc"] == 8
+        assert sources["VEH"][2][(ident, prefix + "_mirrorFoldState")] == {
+            0: "UNKNOWN", 1: "FOLDED", 2: "UNFOLDED", 3: "FOLDING", 4: "UNFOLDING"}
+    field("VEH", 0x3E9, "DAS_mirrorFoldRequest", 25, 2)
+    assert sources["VEH"][2][(0x3E9, "DAS_mirrorFoldRequest")] == {0: "NONE", 1: "FOLD", 2: "UNFOLD", 3: "SNA"}
     field("VEH", 0x273, "UI_mirrorFoldRequest", 24, 2)
+    assert sources["VEH"][2][(0x273, "UI_mirrorFoldRequest")] == {0: "IDLE", 1: "RETRACT", 2: "PRESENT", 3: "SNA"}
     field("VEH", 0x273, "UI_rearFogSwitch", 23, 1)
     field("VEH", 0x61D, "UI_weatherSvcRaining", 56, 1)
     field("VEH", 0x61D, "UI_weatherSvcSnowing", 57, 1)
