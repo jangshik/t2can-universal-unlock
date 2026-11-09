@@ -64,6 +64,19 @@ S3XY BLE와 매크로는 공통 기능 목록을 사용합니다. 신규 편의 
 적용합니다. 기존 BLE 액션 ID 0–13은 유지하고 새 ID 14–54을 추가했습니다.
 Bluetooth 자체를 끄면 BLE 버튼이 연결 해제되므로 대시보드에서 다시 켜야 합니다.
 
+## Wi-Fi SSID 숨김
+
+Settings → Wireless → **Wi-Fi Name Visibility**에서 `Always visible`,
+`Always hidden`, `Hide after boot delay`를 선택합니다. 기본은 표시이며,
+부팅 후 숨김 시간은 **0–3600초**(초깃값 60초)로 설정합니다. 0초는 AP 시작부터
+숨김, 이미 지난 부팅 시각을 저장하면 응답 후 적용입니다. Wi-Fi는 계속 켜져 있으며,
+숨겨진 AP에는 SSID와 비밀번호를 직접 입력해 연결할 수 있습니다.
+
+기존 코어 배치와 CAN 코드는 유지합니다. 숨김 변경은 실행 중인 AP 설정만 갱신하며
+ESP32 재부팅이나 AP 정지/재시작을 호출하지 않습니다. SDK/API 및 호스트 테스트로
+확인했고, 실제 보드의 연결 유지·uptime 검증은 별도입니다. 예약 시각에는 RAM 설정만
+바꾸고 NVS는 사용자가 저장할 때만 기록합니다. [설정과 검증 상세](docs/wifi-ssid-visibility.md).
+
 ## Easy Entry 미러 접기 및 자동 복귀
 
 Settings → Convenience & Macros에서 **Easy Entry Mirror Fold**와 **Mirror Auto Return**을

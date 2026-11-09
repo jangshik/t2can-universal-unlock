@@ -1551,6 +1551,9 @@ static void httpCanBTxTraceCsv() {
 }
 
 
+#include <esp_wifi.h>
+#include "wifi_ap_visibility_runtime.h"
+
 // ─── Wi-Fi access-point configuration ────────────────────────
 static String wifiApActiveSsid;
 static String wifiApActivePassword;
@@ -1614,7 +1617,9 @@ static bool wifiApPersistConfig(const String &ssid, const String &password) {
 
 static bool wifiApStartOnce(const String &ssid, const String &password) {
   for (uint8_t attempt = 0; attempt < 3; attempt++) {
-    if (WiFi.softAP(ssid.c_str(), password.c_str())) {
+    const bool hidden=wifiApVisibilityTarget(wifiApVisibilityNowMs());
+    if (WiFi.softAP(ssid.c_str(), password.c_str(), 1, hidden?1:0)) {
+      wifiApVisibilityApStarted(hidden);
       wifiApActiveSsid = ssid;
       wifiApActivePassword = password;
       return true;
@@ -1627,6 +1632,7 @@ static bool wifiApStartOnce(const String &ssid, const String &password) {
 }
 
 static bool wifiApActivate(const String &requestedSsid, const String &requestedPassword, bool allowFallback) {
+  wifiApVisibilityKnown=false;wifiApVisibilityFallback=false;
   WiFi.softAPdisconnect(true);
   delay(100);
   WiFi.mode(WIFI_AP);
@@ -1638,6 +1644,7 @@ static bool wifiApActivate(const String &requestedSsid, const String &requestedP
   wifiApBuildDefaultSsid(fallbackSsid);
   const String fallbackPassword = "12345678";
   T2CAN_SERIAL_PRINTLN("WiFi: custom AP failed; restoring fail-safe default AP");
+  wifiApVisibilityFallback=true; // Keep the recovery AP discoverable.
   if (!wifiApStartOnce(fallbackSsid, fallbackPassword)) return false;
   wifiApPersistConfig(fallbackSsid, fallbackPassword);
   return true;
@@ -1645,6 +1652,34 @@ static bool wifiApActivate(const String &requestedSsid, const String &requestedP
 
 static String wifiApJsonEscape(const String &in) {
   return escapedTextArduino(in.c_str(), in.length(), JsonTextPolicy::Wifi);
+}
+
+static void wifiApWriteVisibility(JsonWriterArduino& jw) {
+  const uint64_t now=wifiApVisibilityNowMs();
+  const bool target=wifiApVisibilityTarget(now);
+  jw.u32("visibilityMode",wifiApVisibilityConfig.mode);jw.u32("hideAfterSec",wifiApVisibilityConfig.hideAfterSec);
+  jw.boolean("ssidHidden",wifiApSsidHidden);jw.boolean("visibilityKnown",wifiApVisibilityKnown);
+  jw.boolean("visibilityPending",!wifiApVisibilityKnown||wifiApSsidHidden!=target);
+  jw.boolean("visibilityNvsError",wifiApVisibilityNvsError);jw.boolean("visibilityFallback",wifiApVisibilityFallback);
+  jw.string("visibilityError",wifiApVisibilityError==ESP_OK?"":esp_err_to_name(wifiApVisibilityError));
+  const uint64_t deadline=uint64_t(wifiApVisibilityConfig.hideAfterSec)*1000;
+  jw.u32("hideInSec",!wifiApVisibilityFallback&&wifiApVisibilityConfig.mode==2&&now<deadline?uint32_t((deadline-now+999)/1000):0);
+  jw.u32("uptimeSec",uint32_t(now/1000));
+}
+static void httpWifiVisibility() {
+  WifiApVisibilityConfig config=wifiApVisibilityConfig;unsigned seen=0;bool valid=server.args()==2;
+  for(int n=0;n<server.args()&&valid;++n){
+    const String key=server.argName(n);uint16_t value=0;unsigned bit=0;
+    if(key=="mode"){bit=1;valid=wifiApVisibilityDecimal(server.arg(n).c_str(),2,value);if(valid)config.mode=value;}
+    else if(key=="hideAfterSec"){bit=2;valid=wifiApVisibilityDecimal(server.arg(n).c_str(),3600,value);if(valid)config.hideAfterSec=value;}
+    else valid=false;
+    if(seen&bit)valid=false;
+    seen|=bit;
+  }
+  if(!valid||seen!=3){server.send(400,"application/json","{\"ok\":false,\"error\":\"mode must be 0-2 and hideAfterSec 0-3600\"}");return;}
+  if(!wifiApVisibilitySave(config)){server.send(503,"application/json","{\"ok\":false,\"error\":\"Visibility settings were not saved\"}");return;}
+  String result;JsonWriterArduino jw(result);jw.boolean("ok",true);wifiApWriteVisibility(jw);jw.finish();
+  server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",result);
 }
 
 static String wifiApStatusJson() {
@@ -1658,6 +1693,7 @@ static String wifiApStatusJson() {
   jw.string("ssid", wifiApJsonEscape(ssid));
   jw.boolean("passwordIsDefault", password == "12345678");
   jw.string("ip", WiFi.softAPIP().toString());
+  wifiApWriteVisibility(jw);
   jw.finish();
   return j;
 }
@@ -5861,6 +5897,8 @@ static void httpResetRuntimeStats() {
 
 static void webTask(void *arg) {
   T2CAN_SERIAL_PRINTLN("WiFi: Starting AP...");
+  WiFi.persistent(false); // Application-owned NVS only; live changes stay in RAM.
+  wifiApVisibilityLoad();
   WiFi.disconnect(true);
   delay(100);
   WiFi.mode(WIFI_AP);
@@ -5890,6 +5928,7 @@ static void webTask(void *arg) {
   server.on("/api/system/reboot", HTTP_POST, httpRebootT2Can);
   server.on("/api/wifi/status", HTTP_GET, httpWifiStatus);
   server.on("/api/wifi/apply", HTTP_POST, httpWifiApply);
+  server.on("/api/wifi/visibility", HTTP_POST, httpWifiVisibility);
   server.on("/api/ota/status", HTTP_GET, httpOtaStatus);
   server.on("/update", HTTP_POST, httpOtaFinish, httpOtaUpload);
 
@@ -6011,6 +6050,7 @@ static void webTask(void *arg) {
 
   for (;;) {
     server.handleClient();
+    wifiApVisibilityService();
     convenienceService();
     automationService();
     featureActionService();
