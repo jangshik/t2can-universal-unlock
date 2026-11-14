@@ -56,16 +56,20 @@ static void automationLoad(){
 static bool automationApply(const AutomationConfig& c){
   if(!automationConfigValid(c,FEATURE_ACTION_LAST)||!canTxBarrierMutex||xSemaphoreTake(canTxBarrierMutex,pdMS_TO_TICKS(500))!=pdTRUE)return false;
   uint8_t b[AUTOMATION_RECORD_BYTES];automationEncode(c,b);const bool ok=nvsCheckedWriteBlob("features","automation_v2",b,sizeof(b));
+  bool changed=false;
   if(ok){
     portENTER_CRITICAL(&automationMux);
     for(unsigned i=0;i<AUTOMATION_RULES;++i)if(!automationRuleEqual(c.rules[i],automationConfig.rules[i])){
-      automationEngine.resetRule(i);const AutomationMask bit=AutomationMask(1u<<i);automationActive&=~bit;automationInvalid|=bit;
+      changed=true;automationEngine.resetRule(i);const AutomationMask bit=AutomationMask(1u<<i);automationActive&=~bit;automationInvalid|=bit;
       if((c.rules[i].enabled&&c.rules[i].action==AUTOMATION_CAMERA)||
          (automationConfig.rules[i].enabled&&automationConfig.rules[i].action==AUTOMATION_CAMERA))automationCamera.reset();
     }
     automationConfig=c;automationNvsError=false;++automationGeneration;
     portEXIT_CRITICAL(&automationMux);
   }
+  // Queued generic actions have no rule provenance. A configuration edit
+  // cancels pending actions rather than executing a disabled rule later.
+  if(ok&&changed)featureActionClearPending();
   xSemaphoreGive(canTxBarrierMutex);return ok;
 }
 static bool automationAllowed(){
@@ -77,7 +81,11 @@ static void automationObserve(uint8_t bus,uint16_t id,const uint8_t*d,uint8_t dl
   if(id==0x3c2&&canSteeringRecentTxEcho(bus,d,dlc,at))return;
   portENTER_CRITICAL(&automationMux);
   if(automationEpoch!=epoch){automationEpoch=epoch;automationResetLocked();}
+  // Capture cancellation at RX time, before fresh samples can hide a gap or
+  // an intervening Reverse/manual OFF -> ON between two web service ticks.
+  if(automationCamera.busy()||automationCamera.owned())automationCamera.maintain(automationSensors,at,true);
   automationSensors.observe(id,d,dlc,at);automationCamera.observe(id,d,dlc,at);
+  if(automationCamera.busy()||automationCamera.owned())automationCamera.maintain(automationSensors,at,true);
   if(id==0x3c2&&(d[0]&1))++automationStockSerial;
   portEXIT_CRITICAL(&automationMux);
 }
@@ -112,7 +120,7 @@ static void automationService(){
     for(unsigned i=0;i<AUTOMATION_RULES;++i){const auto&r=automationConfig.rules[i];const AutomationMask bit=AutomationMask(1u<<i);
       if(!r.enabled)continue;
       if(r.action==AUTOMATION_CAMERA){
-        if(edges.invalid&bit)automationCamera.reset();
+        if((edges.invalid|edges.rebased)&bit)automationCamera.reset();
         if(edges.entered&bit){if(cameraAllowed&&automationCamera.open(automationSensors,now))++automationActions;else ++automationRejected;}
         if(!(edges.active&bit)&&!automationCameraConditionLocked()){if(cameraAllowed&&automationCamera.owned()&&!automationCamera.busy()){
           if(automationCamera.close(automationSensors,now))++automationActions;else {automationCamera.reset();++automationRejected;}

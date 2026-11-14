@@ -83,7 +83,7 @@ static void convenienceLoad() {
   convenienceEngine.reset(convenienceEpoch);convenienceEngine.configureMirrors(c);
   portEXIT_CRITICAL(&convenienceMux);
 }
-static bool convenienceApply(const ConvenienceConfig &c,const MacroGestureConfig &m) {
+static bool convenienceApply(const ConvenienceConfig &c,const MacroGestureConfig &m,bool clearPending=true) {
   if(!convenienceConfigValidPure(c)||!macroGestureConfigValidPure(m))return false;
   if(!canTxBarrierMutex||xSemaphoreTake(canTxBarrierMutex,pdMS_TO_TICKS(500))!=pdTRUE)return false;
   uint8_t bytes[32];convenienceEncode(c,m,bytes);
@@ -94,7 +94,7 @@ static bool convenienceApply(const ConvenienceConfig &c,const MacroGestureConfig
     convenienceEngine.configureMirrors(c);
     ++convenienceGeneration;convenienceMacros.configure(m);
     portEXIT_CRITICAL(&convenienceMux);
-    featureActionClearPending();
+    if(clearPending)featureActionClearPending();
   }
   xSemaphoreGive(canTxBarrierMutex);return ok;
 }
@@ -125,7 +125,8 @@ static bool convenienceToggleAction(uint8_t action) {
     case FEATURE_ACTION_MACRO:m.enabled=!m.enabled;break;
     default:return false;
   }
-  return convenienceApply(c,m);
+  // Completing one queued action must not erase its pending siblings.
+  return convenienceApply(c,m,false);
 }
 static bool conveniencePedalAvailable() {
   portENTER_CRITICAL(&pedalMapMux);const bool manual=pedalMapSession.active;portEXIT_CRITICAL(&pedalMapMux);

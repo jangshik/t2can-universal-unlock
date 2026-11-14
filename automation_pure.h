@@ -30,8 +30,13 @@ static inline bool automationConfigValid(const AutomationConfig& c,uint8_t lastA
   return cameras<=1;
 }
 struct AutomationSample {
-  int32_t value=0;uint32_t at=0;bool valid=false;
-  void set(int32_t v,uint32_t now,bool ok=true){value=v;at=now;valid=ok;}
+  int32_t value=0;uint32_t at=0,generation=0;bool valid=false;
+  void set(int32_t v,uint32_t now,bool ok=true){
+    // Remember an RX gap/invalid value even if fresh data arrives before the
+    // web task next evaluates the rule. Recovery must establish a new baseline.
+    if(!ok||!valid||uint32_t(now-at)>500)++generation;
+    value=v;at=now;valid=ok;
+  }
   bool fresh(uint32_t now,uint32_t age=500)const{return valid&&uint32_t(now-at)<=age;}
 };
 struct AutomationSensors {
@@ -47,22 +52,26 @@ struct AutomationSensors {
   bool cameraFresh(uint32_t now)const{return camera.fresh(now,1000)&&fascia.fresh(now,1000);}
   bool cameraOn()const{return camera.value||fascia.value;}
 };
-struct AutomationEdges {AutomationMask entered=0,left=0,invalid=0,active=0;};
+struct AutomationEdges {AutomationMask entered=0,left=0,invalid=0,active=0,rebased=0;};
 class AutomationEngine {
  public:
   void reset(){*this=AutomationEngine();}
   void resetRule(unsigned i){if(i<AUTOMATION_RULES)states_[i]=State{};}
   AutomationEdges evaluate(const AutomationConfig& c,const AutomationSensors& s,uint32_t now){
+    if(evaluated_&&uint32_t(now-evaluatedAt_)>500)reset();
+    evaluated_=true;evaluatedAt_=now;
     AutomationEdges out;
     for(unsigned i=0;i<AUTOMATION_RULES;++i){
       const auto& r=c.rules[i];auto& st=states_[i];const AutomationMask bit=AutomationMask(1u<<i);
       const auto& v=r.sensor==1?s.speed:(r.sensor==2?s.gear:s.brake);
       if(!r.enabled||!v.fresh(now)||(r.gear&&!s.gear.fresh(now))){st=State{};out.invalid|=bit;continue;}
+      if(st.seen&&(st.sensorGeneration!=v.generation||(r.gear&&st.gearGeneration!=s.gear.generation)))st=State{};
+      st.sensorGeneration=v.generation;st.gearGeneration=s.gear.generation;
       const int32_t scale=r.sensor==1?100:1;
       const bool match=v.value>=int32_t(r.low)*scale&&v.value<=int32_t(r.high)*scale&&(!r.gear||s.gear.value==r.gear);
       // Establish a baseline after boot, configuration changes or stale RX.
       // Resumption is not an edge and must not replay an old action.
-      if(!st.seen){st.seen=true;st.active=match;st.pending=match;st.since=now;}
+      if(!st.seen){out.rebased|=bit;st.seen=true;st.active=match;st.pending=match;st.since=now;}
       else if(match==st.active){st.pending=match;st.since=now;}
       else {
         if(st.pending!=match){st.pending=match;st.since=now;}
@@ -75,7 +84,8 @@ class AutomationEngine {
     return out;
   }
  private:
-  struct State{bool seen=false,active=false,pending=false;uint32_t since=0;};
+  struct State{bool seen=false,active=false,pending=false;uint32_t since=0,sensorGeneration=0,gearGeneration=0;};
+  bool evaluated_=false;uint32_t evaluatedAt_=0;
   State states_[AUTOMATION_RULES];
 };
 
