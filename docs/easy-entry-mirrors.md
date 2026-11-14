@@ -12,11 +12,12 @@ In Settings → Convenience & Macros:
 | Setting | Default | Range / behavior |
 | --- | --- | --- |
 | Easy Entry Mirror Fold | OFF | Independent of Easy Entry Window |
+| Easy Entry Weather Guard | ON | Blocks new window lowering and mirror folding in rain/snow or without fresh weather data |
 | Mirror Auto Return | OFF | Applies only to folds initiated while this is enabled |
 | Return speed | 20 km/h | 5–50 km/h, inclusive threshold |
 | Hold speed for | 2 seconds | 1–30 seconds continuously at/above threshold |
 
-Both switches and the speed/time settings persist in NVS. Changing any mirror
+All switches and the speed/time settings persist in NVS. Changing any mirror
 setting cancels the current return permission; enabling Auto Return after a fold
 does not retroactively authorize unfolding. Existing v1 Mirror Sync settings
 are migrated with both mirror switches OFF because the old setting unfolded on
@@ -30,8 +31,13 @@ A fresh released→pulled front-door handle edge, Park, near-zero vehicle speed
 (0–0.08 km/h to cover one speed quantization step), both mirrors confirmed
 UNFOLDED, and a fresh idle stock mirror-request frame are required to request
 folding. The first handle sample establishes a baseline; a held handle at boot
-is not a new edge. Rear handles, rain and window position do not trigger or
-control mirror folding. Unknown, moving, already folded or asymmetric mirrors
+is not a new edge. Rear handles and window position do not trigger or
+control mirror folding. With Weather Guard ON, a dry weather frame received
+within 2 seconds is also required; rain, snow, missing or stale weather blocks
+new folding and window lowering. OFF removes only the weather condition.
+Clearing weather does not replay a blocked handle pull: release and pull again.
+Weather does not block closing an automatically lowered window or the normal
+speed/time-based return of mirrors already folded by Easy Entry. Unknown, moving, already folded or asymmetric mirrors
 cannot grant a new return permission.
 
 A successful CAN send is not physical confirmation. Both mirrors must report
@@ -82,14 +88,22 @@ Supplied Bayberry VEH DBC contracts:
 - `0x273`: UI mirror request at bit 24, length 2: 0 IDLE, 1 RETRACT,
   2 PRESENT, 3 SNA. Preserve all other fields.
 - `0x3E9`: DAS mirror request at bit 25, length 2.
+- `0x61D`: `UI_weatherSvcRaining` at bit 56 and `UI_weatherSvcSnowing` at bit 57.
+  The supplied DBC has no separate hail signal. Hail is blocked only if the
+  vehicle reports rain or snow; independent hail detection is not available.
+  Fresh CAN reception does not establish the age or accuracy of the upstream
+  weather service. No unverified service-age units are assumed.
 - `0x118`: gear; `0x257`: vehicle speed in km/h, independent of display units.
 
 API configuration adds `mirrorAutoReturn`, `mirrorReturnSpeedKph` and
-`mirrorReturnDelaySec` to `/api/convenience/config`. Status includes
+`mirrorReturnDelaySec`, plus `easyEntryWeatherGuard` (boolean), to `/api/convenience/config`. Status includes
 `mirrorLeftState`, `mirrorRightState`, and `mirrorReturnState`:
 0 idle/unarmed, 1 fold queued, 2 waiting for fold confirmation, 3 armed,
-4 return queued, 5 waiting for unfold confirmation. Settings use version 2 of
-the existing 32-byte `features/convenience` record, with strict v1 migration.
+4 return queued, 5 waiting for unfold confirmation. Settings use version 3 of
+the existing 32-byte `features/convenience` record. Both v1 and v2 records
+migrate with Weather Guard ON; v1 retains the conservative mirror migration.
+The weather condition is checked again at final CAN admission for lowering and
+folding, without adding waits, network requests, tasks or core-affinity changes.
 
 Host tests cover existing folded/asymmetric mirrors, one-shot completion,
 failed sends and incomplete movement, same-state external fold requests,

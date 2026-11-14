@@ -11,7 +11,7 @@ static void fresh(){
 static void handle(){uint8_t d[8]={};d[1]=4;d[6]=mirror<<4;feed(0x102,d);}
 static void setup(){
  beforeValidate=nullptr;transportOk=true;passive=false;bodySupported=true;gear=1;speed=0;mirror=2;now+=1000;
- ConvenienceConfig c;c.mirrorSync=c.mirrorAutoReturn=true;
+ ConvenienceConfig c;c.mirrorSync=c.mirrorAutoReturn=true;c.easyEntryWeatherGuard=false;
  assert(convenienceApply(c,{}));convenienceResetUnderTxBarrier();sent.clear();fresh();
 }
 static void own(){handle();assert(sent.size()==1&&sent.back().data[3]==0xa1);mirror=1;fresh();assert(convenienceEngine.mirrorReturnState()==3);}

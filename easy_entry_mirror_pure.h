@@ -36,7 +36,7 @@ class EasyEntryMirrorEngine {
     state_=effect==5?Folding:Unfolding;
     confirmed_=0;timing_=false;
   }
-  uint8_t observe(uint16_t id,const uint8_t* d,uint8_t dlc,uint32_t now,uint8_t* output) {
+  uint8_t observe(uint16_t id,const uint8_t* d,uint8_t dlc,uint32_t now,uint8_t* output,bool allowFold=true) {
     // Test old freshness before updating: a recovered stream cannot resurrect
     // a return permission or count a data gap towards the speed hold interval.
     if(state_!=Idle&&(!inputsFresh(now)||!fresh(templateSeen_,templateMs_,now,500)))cancel();
@@ -81,7 +81,7 @@ class EasyEntryMirrorEngine {
     if(state_==Folding&&!parked(now))cancel();
     if(state_==FoldQueued&&(!parked(now)||!both(2,now)))cancel();
     if(state_==ReturnQueued&&!returnEligible(now))cancel();
-    if(state_==Idle&&frontEdge&&parked(now)&&both(2,now)&&templateIdle(now)){
+    if(state_==Idle&&frontEdge&&allowFold&&parked(now)&&both(2,now)&&templateIdle(now)){
       state_=FoldQueued;requestMs_=now;
       if(prepare(5,now,output))return 5;
     }

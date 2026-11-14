@@ -42,7 +42,8 @@ static void convenienceSnapshot(ConvenienceConfig &c, MacroGestureConfig &m) {
 // Explicit versioned wire format: no compiler padding or bool representation
 // in NVS. A single committed blob prevents partially saved gesture mappings.
 static void convenienceEncode(const ConvenienceConfig &c,const MacroGestureConfig &m,uint8_t b[32]) {
-  memset(b,0,32); b[0]=2;
+  memset(b,0,32); b[0]=3;
+  b[26]=c.easyEntryWeatherGuard;
   b[23]=c.mirrorAutoReturn;b[24]=c.mirrorReturnSpeedKph;b[25]=c.mirrorReturnDelaySec;
   const bool flags[]={c.kickdown,c.easyEntry,c.mirrorSync,c.rearBeltLeft,c.rearBeltCenter,c.rearBeltRight,c.reverseHazard,c.reverseFog};
   for(unsigned n=0;n<8;++n)if(flags[n])b[1]|=1u<<n;
@@ -52,9 +53,11 @@ static void convenienceEncode(const ConvenienceConfig &c,const MacroGestureConfi
   for(unsigned n=0;n<3;++n){b[14+3*n]=m.slots[n].button;b[15+3*n]=uint8_t(m.slots[n].gesture);b[16+3*n]=m.slots[n].action;}
 }
 static bool convenienceDecode(const uint8_t b[32],ConvenienceConfig &c,MacroGestureConfig &m) {
-  if((b[0]!=1&&b[0]!=2)||b[5]>1)return false;
-  for(unsigned n=b[0]==1?23:26;n<32;++n)if(b[n])return false;
-  if(b[0]==2&&b[23]>1)return false;
+  if((b[0]<1||b[0]>3)||b[5]>1)return false;
+  for(unsigned n=b[0]==1?23:(b[0]==2?26:27);n<32;++n)if(b[n])return false;
+  if(b[0]>=2&&b[23]>1)return false;
+  if(b[0]==3&&b[26]>1)return false;
+  c.easyEntryWeatherGuard=b[0]<3?true:b[26]!=0;
   bool* flags[]={&c.kickdown,&c.easyEntry,&c.mirrorSync,&c.rearBeltLeft,&c.rearBeltCenter,&c.rearBeltRight,&c.reverseHazard,&c.reverseFog};
   for(unsigned n=0;n<8;++n)*flags[n]=(b[1]&(1u<<n))!=0;
   // v1 Mirror Sync unfolded on entry. Never silently enable the new folding behavior.
@@ -144,6 +147,11 @@ static bool convenienceValidateTx(struct can_frame *frame,void *context) {
   if(c.effect==5||c.effect==6){
     portENTER_CRITICAL(&convenienceMux);
     hazardValid=convenienceEngine.prepareMirrorTx(c.effect,millis(),frame->data);
+    portEXIT_CRITICAL(&convenienceMux);
+  }
+  if(c.effect==1||c.effect==5){
+    portENTER_CRITICAL(&convenienceMux);
+    hazardValid=hazardValid&&convenienceEngine.entryWeatherAllows(convenienceConfig,millis());
     portEXIT_CRITICAL(&convenienceMux);
   }
   return hazardValid&&convenienceBodySupported()&&!canUsbTxHeld()&&mcpReady&&twaiReady&&

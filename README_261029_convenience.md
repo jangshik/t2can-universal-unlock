@@ -22,20 +22,27 @@ BUTTON 요청으로 확인될 때만 자동 종료하도록 보강했습니다.
 ## 추가 기능
 
 설정 진입: **Settings → Convenience & Macros**.
-새 편의 기능과 매크로의 초기값은 OFF이며, 활성화 여부와 매개변수는 저장됩니다.
+편의 동작과 매크로의 초기값은 OFF이며, 활성화 여부와 매개변수는 저장됩니다.
+보호 옵션인 **Easy Entry Weather Guard**는 기본 ON입니다.
 CAN Transmission은 별도의 기존 송신 모드 설정을 사용합니다.
 
 | 기능 | 동작과 설정 | Body + Chassis | Party + Chassis |
 | --- | --- | --- | --- |
 | CAN Transmission | OFF로 두면 두 CAN 컨트롤러를 Listen Only로 전환 | 지원 | 지원 |
 | Kickdown | Chill 상태에서 설정한 페달 임계값을 넘으면 Sport 요청. 해제는 페달·브레이크·둘 중 하나 선택 | Body 경로 | Chassis 경로 |
-| Easy Entry Window | P에서 닫힌 창문·도어 상태·건조 날씨·새 핸들 당김을 확인해 창문 내림 요청, 문 닫힘 전이 후 복귀 요청 | 지원, 기본 OFF | 미지원 |
+| Easy Entry Window | P에서 닫힌 창문·도어 상태·새 핸들 당김과 날씨 보호 조건을 확인해 창문 내림 요청, 문 닫힘 전이 후 복귀 요청 | 지원, 기본 OFF | 미지원 |
 | Easy Entry Mirror Fold / Auto Return | P·정지 상태에서 앞문 손잡이를 당기면 접기. 장치가 접은 경우에만 D에서 설정 속도·시간 충족 후 복귀 | 지원, 기본 OFF | 미지원 |
+| Easy Entry Weather Guard | ON이면 비·눈 또는 날씨 신호 미수신/2초 초과 시 창문 내림·미러 접기 차단. 창문 닫기와 미러 복귀는 허용. 설정은 재부팅 후 유지 | 지원, 기본 ON | 미지원 |
 | Rear Belt Left / Center / Right | 후열 좌석별 착좌 상태에 따라 버클 OFF를 ON으로 변경. SNA/FAULT와 착좌 필드는 보존 | 지원 | 미지원 |
 | Hazard Light · 3 Flashes | 한 번 호출하면 좌우 점멸 요청을 3회 세고 OFF 요청. 대시보드·매크로·S3XY BLE에서 실행 | 지원 | 미지원 |
 | Reverse Hazard | 후진 진입·이탈 시 비상등 버튼 요청. 송신 성공 여부와 자동 제어 소유권 추적 | 지원 | 미지원 |
 | Reverse Rear Fog | 후진 중 후방 안개등 요청 | 지원 | 미지원 |
 | Custom Macros | 핸들 버튼 더블·트리플·롱 프레스에 기능 배정. 3개 슬롯과 시간 설정 | 지원 | 미지원 |
+
+날씨는 차량의 `0x61D` 비·눈 신호를 사용합니다. 제공된 DBC에 우박 전용 신호는 없어
+우박은 차량이 비 또는 눈으로 보고하는 경우에만 차단됩니다. 외부 날씨 서비스의
+실제 정보 갱신 시점·정확도까지 보장하는 것은 아닙니다. OFF로 설정하면 날씨 조건만
+제외하며, 날씨가 좋아졌다는 이유로 이전 손잡이 동작을 재실행하지 않습니다.
 
 **Continuous AP - flipper는 제거했습니다. 기존 Continuous AP는 유지합니다.**
 

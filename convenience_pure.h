@@ -7,7 +7,7 @@
 // routing, profile support and final transport admission remain runtime duties.
 struct ConvenienceConfig {
   bool kickdown=false, easyEntry=false, mirrorSync=false;
-  bool mirrorAutoReturn=false;
+  bool mirrorAutoReturn=false, easyEntryWeatherGuard=true;
   uint8_t mirrorReturnSpeedKph=20, mirrorReturnDelaySec=2;
   bool rearBeltLeft=false, rearBeltCenter=false, rearBeltRight=false;
   bool reverseHazard=false, reverseFog=false;
@@ -42,6 +42,9 @@ class ConvenienceEngine {
   }
   uint8_t mirrorReturnState() const { return mirrors_.state(); }
   uint8_t observedMirror(uint8_t side,uint32_t now) const { return mirrors_.observed(side,now); }
+  bool entryWeatherAllows(const ConvenienceConfig& c,uint32_t now) const {
+    return !c.easyEntryWeatherGuard||(fresh(weatherSeen_,weatherMs_,now,2000)&&!wet_);
+  }
   bool prepareMirrorTx(uint8_t effect,uint32_t now,uint8_t* data) { return mirrors_.prepare(effect,now,data); }
   bool windowTestReady(uint32_t now) const {
     return fresh(gearSeen_,gearMs_,now,500)&&gear_==1&&
@@ -93,9 +96,10 @@ class ConvenienceEngine {
     if(epoch!=epoch_)reset(epoch);
     if(!d||dlc>8)return out;
     if(!convenienceConfigValidPure(c)||!txAllowed){reset(epoch);return out;}
+    if(id==0x61D&&dlc==8){wet_=(d[7]&3)!=0;weatherSeen_=true;weatherMs_=now;}
     configureMirrors(c);
     ConvenienceFrame mirrorFrame;
-    mirrorFrame.effect=mirrors_.observe(id,d,dlc,now,mirrorFrame.data);
+    mirrorFrame.effect=mirrors_.observe(id,d,dlc,now,mirrorFrame.data,entryWeatherAllows(c,now));
     if(mirrorFrame.effect){mirrorFrame.id=0x273;out.frames[out.count++]=mirrorFrame;}
     // Loss of current drive inputs clears ownership instead of replaying stale
     // commands when the bus returns. Unsigned subtraction handles millis wrap.
@@ -141,7 +145,6 @@ class ConvenienceEngine {
     }
     if(id==0x39D && dlc>=3){brake_=d[2]&3;brakeSeen_=brake_==1||brake_==2;brakeMs_=now;
       if(!brakeSeen_||(brake_==2&&c.kickReleaseMode!=0))kickApplied_=false;}
-    if(id==0x61D&&dlc==8){wet_=(d[7]&3)!=0;weatherSeen_=true;weatherMs_=now;}
     if(id==0x3F5&&dlc==8){
       indicatorLeft_=(d[6]>>2)&3;indicatorRight_=(d[6]>>4)&3;
       indicatorSeen_=indicatorLeft_<3&&indicatorRight_<3;indicatorMs_=now;
@@ -183,7 +186,7 @@ class ConvenienceEngine {
         const bool doorClosed=fresh(doorSeen_[i],doorMs_[i],now,500)&&door_[i]==1;
         const bool windowClosed=fresh(windowSeen_[i],windowMs_[i],now,1000)&&(window_[i]==1||window_[i]==6);
         if(c.easyEntry&&c.windowDropRaw<=20&&parked&&doorClosed&&fresh(handleSeen_[i],handleMs_[i],now,500)){
-          if(value&&!handle_[i]&&windowClosed&&fresh(weatherSeen_,weatherMs_,now,2000)&&!wet_){
+          if(value&&!handle_[i]&&windowClosed&&entryWeatherAllows(c,now)){
             windowCommand(out,1,c.windowDropRaw,1u<<i,1,now);
           }
           // Request 6 is undefined in the supplied DBC. No guessed STOP TX.

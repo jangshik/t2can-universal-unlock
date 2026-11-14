@@ -22,6 +22,7 @@ static String convenienceJson() {
   w.boolean("easyEntrySupported",convenienceActionSupported(FEATURE_ACTION_EASY_ENTRY));
   w.boolean("seatbeltTxSupported",convenienceBodySupported());w.boolean("nvsError",convenienceNvsError);
   w.boolean("kickdown",c.kickdown);w.boolean("easyEntry",c.easyEntry);w.boolean("mirrorSync",c.mirrorSync);
+  w.boolean("easyEntryWeatherGuard",c.easyEntryWeatherGuard);
   w.boolean("mirrorAutoReturn",c.mirrorAutoReturn);w.u32("mirrorReturnSpeedKph",c.mirrorReturnSpeedKph);w.u32("mirrorReturnDelaySec",c.mirrorReturnDelaySec);
   w.boolean("rearBeltLeft",c.rearBeltLeft);w.boolean("rearBeltCenter",c.rearBeltCenter);w.boolean("rearBeltRight",c.rearBeltRight);
   w.boolean("reverseHazard",c.reverseHazard);w.boolean("reverseFog",c.reverseFog);
@@ -56,6 +57,7 @@ static void httpConvenienceUpdate() {
     if(key=="masterEnabled"){master=true;masterValue=v==1;valid=valid&&v<=1&&server.args()==1;continue;}
     if(key=="kickdown"){flag=&c.kickdown;needsKickdown=true;}
     else if(key=="easyEntry"){flag=&c.easyEntry;}
+    else if(key=="easyEntryWeatherGuard"){flag=&c.easyEntryWeatherGuard;}
     else if(key=="mirrorSync"){flag=&c.mirrorSync;}
     else if(key=="mirrorAutoReturn"){flag=&c.mirrorAutoReturn;}
     else if(key=="rearBeltLeft")flag=&c.rearBeltLeft;

@@ -242,5 +242,8 @@ This Universal release is based on source-level comparison and consolidation of:
 Juniper convenience controls, configurable steering macros and the shared S3XY
 action registry are described in [the integration review](docs/convenience-port-review.md).
 Easy Entry defaults OFF and can be enabled in Settings → Convenience & Macros.
+Easy Entry Weather Guard defaults ON: rain/snow or missing/stale weather blocks
+new window lowering and mirror folding. Closing and mirror return remain available.
+The guard is optional and persisted; the supplied CAN signals do not identify hail separately.
 LAB → Easy Entry Test provides single-shot window commands and raw state diagnostics.
 See [DBC validation and remaining vehicle checks](docs/juniper-dbc-review.md).
