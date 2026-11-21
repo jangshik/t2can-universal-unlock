@@ -328,11 +328,14 @@ enum BcButtonPure : uint8_t {
   BC_BTN_LEFT_TILT_RIGHT,
   BC_BTN_RIGHT_TILT_LEFT,
   BC_BTN_RIGHT_TILT_RIGHT,
+  BC_BTN_VOICE,    // VCLEFT_swcVoiceControlPress (48|2)
+  BC_BTN_CAMERA,   // VCLEFT_swcCameraButtonState (50|2)
   BC_BTN_COUNT
 };
+static constexpr uint8_t BC_BTN_COUNT_V1 = 6u;  // blob v1 had the six wheel controls only
 
 static inline uint8_t bcButtonStartBitPure(uint8_t button) {
-  static const uint8_t bits[BC_BTN_COUNT] = {5u, 12u, 14u, 3u, 8u, 10u};
+  static const uint8_t bits[BC_BTN_COUNT] = {5u, 12u, 14u, 3u, 8u, 10u, 48u, 50u};
   return button < BC_BTN_COUNT ? bits[button] : 0u;
 }
 
@@ -679,13 +682,20 @@ static inline void bodyComfortSanitizePure(BodyComfortConfigPure &c) {
   c.drOffDelayMs = bcClampPure<uint16_t>(c.drOffDelayMs, 0u, 10000u);
 }
 
-static constexpr uint8_t BC_CFG_BLOB_VERSION = 1u;
-static constexpr uint8_t BC_CFG_BLOB_LEN = 36u;
+// v1: 36 bytes, six wheel controls. v2: 42 bytes, adds voice + camera buttons.
+static constexpr uint8_t BC_CFG_BLOB_VERSION = 2u;
+static constexpr uint8_t BC_CFG_BLOB_LEN_V1 = 17u + BC_BTN_COUNT_V1 * BC_GESTURE_COUNT + 1u;
+static constexpr uint8_t BC_CFG_BLOB_LEN = 17u + BC_BTN_COUNT * BC_GESTURE_COUNT + 1u;
+static_assert(BC_CFG_BLOB_LEN_V1 == 36u && BC_CFG_BLOB_LEN == 42u, "config blob layout");
+
+static inline uint8_t bcCfgBlobChecksumLenPure(const uint8_t *b, uint8_t len) {
+  uint8_t sum = 0xA5u;
+  for (uint8_t i = 0; i + 1u < len; ++i) sum = (uint8_t)(sum + b[i]);
+  return sum;
+}
 
 static inline uint8_t bcCfgBlobChecksumPure(const uint8_t *b) {
-  uint8_t sum = 0xA5u;
-  for (uint8_t i = 0; i + 1u < BC_CFG_BLOB_LEN; ++i) sum = (uint8_t)(sum + b[i]);
-  return sum;
+  return bcCfgBlobChecksumLenPure(b, BC_CFG_BLOB_LEN);
 }
 
 static inline void bodyComfortSerializePure(const BodyComfortConfigPure &c,
@@ -721,9 +731,11 @@ static inline void bodyComfortSerializePure(const BodyComfortConfigPure &c,
 static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
                                               BodyComfortConfigPure &c) {
   c = bodyComfortDefaultsPure();
-  if (in == nullptr || len != BC_CFG_BLOB_LEN || in[0] != BC_CFG_BLOB_VERSION ||
-      bcCfgBlobChecksumPure(in) != in[BC_CFG_BLOB_LEN - 1u])
-    return false;
+  if (in == nullptr) return false;
+  uint8_t buttons = 0;
+  if (len == BC_CFG_BLOB_LEN && in[0] == BC_CFG_BLOB_VERSION) buttons = BC_BTN_COUNT;
+  else if (len == BC_CFG_BLOB_LEN_V1 && in[0] == 1u) buttons = BC_BTN_COUNT_V1;  // migrate v1
+  if (buttons == 0u || bcCfgBlobChecksumLenPure(in, (uint8_t)len) != in[len - 1u]) return false;
   c.eeEnabled = (in[1] & 0x01u) != 0u;
   c.eeWeatherBlock = (in[1] & 0x02u) != 0u;
   c.eeWeatherStrict = (in[1] & 0x04u) != 0u;
@@ -746,7 +758,7 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
   c.rvLightMode = in[14];
   c.drOffDelayMs = (uint16_t)(in[15] | (in[16] << 8));
   uint8_t i = 17u;
-  for (uint8_t b = 0; b < BC_BTN_COUNT; ++b)
+  for (uint8_t b = 0; b < buttons; ++b)
     for (uint8_t g = 0; g < BC_GESTURE_COUNT; ++g) c.mcAction[b][g] = in[i++];
   bodyComfortSanitizePure(c);
   return true;

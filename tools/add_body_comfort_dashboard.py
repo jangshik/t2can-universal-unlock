@@ -34,10 +34,11 @@ TEXT = {
         "sb": "Rear Seat-Belt Chime Off", "sbD": "Suppress the unbuckled chime for the selected 2nd-row seats.",
         "seats": ["2nd row left", "2nd row centre", "2nd row right"],
         "mc": "Steering Wheel Macros",
-        "mcD": "Double, triple or long press on a wheel control runs an action. The stock single-press function still runs.",
+        "mcD": "Double, triple or long press on a wheel button runs an action: 8 buttons × 3 gestures = 24 slots. The button's own stock function still runs on each press.",
         "lp": "LONG PRESS (ms)", "gp": "CLICK GAP (ms)",
         "btn": ["Left scroll · press", "Right scroll · press", "Left scroll · tilt left",
-                "Left scroll · tilt right", "Right scroll · tilt left", "Right scroll · tilt right"],
+                "Left scroll · tilt right", "Right scroll · tilt left", "Right scroll · tilt right",
+                "Voice button", "Camera button"],
         "ges": ["Double", "Triple", "Long"],
         "act": ["None", "Toggle Easy Entry", "Toggle mirror fold", "Toggle rear belt chime",
                 "Toggle hazard blink", "Toggle reverse hazards", "Toggle reverse light",
@@ -85,9 +86,10 @@ TEXT = {
         "sb": "关闭后排安全带提示音", "sbD": "对所选第二排座椅关闭未系安全带提示音。",
         "seats": ["第二排左", "第二排中", "第二排右"],
         "mc": "方向盘宏",
-        "mcD": "双击、三击或长按方向盘按键执行动作。原车单击功能仍会执行。",
+        "mcD": "双击、三击或长按方向盘按键执行动作：8 个按键 × 3 种手势 = 24 个位置。每次按下时按键的原车功能仍会执行。",
         "lp": "长按 (ms)", "gp": "连击间隔 (ms)",
-        "btn": ["左滚轮 · 按下", "右滚轮 · 按下", "左滚轮 · 左拨", "左滚轮 · 右拨", "右滚轮 · 左拨", "右滚轮 · 右拨"],
+        "btn": ["左滚轮 · 按下", "右滚轮 · 按下", "左滚轮 · 左拨", "左滚轮 · 右拨", "右滚轮 · 左拨", "右滚轮 · 右拨",
+                "语音按钮", "摄像头按钮"],
         "ges": ["双击", "三击", "长按"],
         "act": ["无", "切换便捷上车", "切换后视镜折叠", "切换后排安全带提示音", "切换双闪闪烁",
                 "切换倒车双闪", "切换倒车后灯", "切换开门双闪", "双闪闪烁", "折叠 / 展开后视镜", "摄像头画面"],
@@ -165,7 +167,7 @@ function build(){
   h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
   h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
   let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
-  T.btn.forEach((b,bi)=>{m+=`<div class="detailRow"><div><div class="detailLeft">${esc(b)}</div></div></div>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${sel(`bcM${bi}_${gi}`,b+' · '+g,T.act,'max-width:62%')}</div>`).join('')});
+  [6,7,0,1,2,3,4,5].forEach(bi=>{const b=T.btn[bi];m+=`<div class="detailRow"><div><div class="detailLeft">${esc(b)}</div></div></div>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${sel(`bcM${bi}_${gi}`,b+' · '+g,T.act,'max-width:62%')}</div>`).join('')});
   h.push(lbl(T.mc),card(m));
   h.push(lbl(T.hb),card(tg('bcHb',T.hb,T.hbD)+`<div class="fieldgrid">${num('bcHc',T.hc,1,10)}</div>`+btnRow(['bcHbSave',T.save,1],['bcHbRun',T.run,0])));
   h.push(lbl(T.rh),card(tg('bcRh',T.rh,T.rhD)));
@@ -214,7 +216,7 @@ const bindToggle=(id,key)=>{const e=$b(id);if(e)e.onchange=()=>save({[key]:e.che
 const maskOf=(prefix,n)=>{let m=0;for(let i=0;i<n;i++)if($b(prefix+i)?.checked)m|=1<<i;return m};
 for(let i=0;i<4;i++){const e=$b('bcDoor'+i);if(e)e.onchange=()=>save({eeDoorMask:maskOf('bcDoor',4)},e)}
 for(let i=0;i<3;i++){const e=$b('bcSeat'+i);if(e)e.onchange=()=>save({sbSeatMask:maskOf('bcSeat',3)},e)}
-for(let bi=0;bi<6;bi++)for(let gi=0;gi<3;gi++){const e=$b(`bcM${bi}_${gi}`);if(e)e.onchange=()=>save({mc:`${bi},${gi},${e.value}`})}
+for(let bi=0;bi<8;bi++)for(let gi=0;gi<3;gi++){const e=$b(`bcM${bi}_${gi}`);if(e)e.onchange=()=>save({mc:`${bi},${gi},${e.value}`})}
 const rlm=$b('bcRlm');if(rlm)rlm.onchange=()=>save({rvLightMode:rlm.value});
 $b('bcBody')?.addEventListener('input',e=>{if(e.target.type==='number')e.target.dataset.dirty='1'});
 function readNums(map){const out={};for(const[id,key]of map){const e=$b(id),v=Number(e?.value);if(!e||e.value===''||!Number.isInteger(v)||v<Number(e.min)||v>Number(e.max)){e?.focus();setText('bcSaveState',T.failed+' · '+key);return null}out[key]=v}return out}

@@ -195,7 +195,6 @@ static void sendFrames() {
   memset(d, 0, 8); bcSetBitsPure(d, 0, 1, 1u);
   for (uint8_t b = 0; b < BC_BTN_COUNT; ++b)
     bcSetBitsPure(d, bcButtonStartBitPure(b), 2, car.buttons[b] ? BC_SWC_ON : 1u);
-  bcSetBitsPure(d, 50, 2, 1u);
   rx(0x3C2, d);
   memset(d, 0, 8); d[2] = 0x11; rx(0x273, d);
   memset(d, 0, 8); rx(0x3B3, d);
@@ -567,6 +566,22 @@ static void testHazardBlinkAndMacros() {
   car.buttons[BC_BTN_LEFT_PRESS] = true; run(100);
   car.buttons[BC_BTN_LEFT_PRESS] = false; run(700);
   assert(bcCfg.rvHazard);
+  // Voice and camera buttons: double voice toggles Easy Entry, long camera folds mirrors.
+  bcCfg.mcEnabled = true;
+  bcCfg.mcAction[BC_BTN_VOICE][BC_GESTURE_DOUBLE] = BC_ACTION_TOGGLE_EASY_ENTRY;
+  bcCfg.mcAction[BC_BTN_CAMERA][BC_GESTURE_LONG] = BC_ACTION_MIRROR_FOLD_NOW;
+  assert(!bcCfg.eeEnabled);
+  car.buttons[BC_BTN_VOICE] = true; run(100);
+  car.buttons[BC_BTN_VOICE] = false; run(100);
+  car.buttons[BC_BTN_VOICE] = true; run(100);
+  car.buttons[BC_BTN_VOICE] = false; run(700);
+  assert(bcCfg.eeEnabled && bcState.lastMacroButton == BC_BTN_VOICE);
+  g_tx.clear();
+  car.buttons[BC_BTN_CAMERA] = true; run(1000);
+  car.buttons[BC_BTN_CAMERA] = false; run(500);
+  assert(bcState.lastMacroButton == BC_BTN_CAMERA && bcState.lastMacroGesture == BC_GESTURE_LONG);
+  auto mf = takeTx(0x273);
+  assert(!mf.empty() && bcGetBitsPure(mf[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT);
   // Blink is rejected while disabled.
   bcCfg.hzBlinkEnabled = false;
   assert(bcRunActionLocked(g_now, BC_ACTION_RUN_HAZARD_BLINK) != nullptr);
@@ -581,6 +596,10 @@ static void testHttp() {
   assert(bcCfg.mcAction[1][2] == BC_ACTION_RUN_HAZARD_BLINK && bcCfg.rvLightMode == 0);
   assert(server.lastBody.find("\"eeEnabled\":true") != std::string::npos);
   assert(server.lastBody.find("\"mcAction\":[[0,0,0],[0,0,8],") != std::string::npos);
+  assert(server.lastBody.find(",[0,0,0],[0,0,0]],\"hzBlinkEnabled\"") != std::string::npos);  // 8 buttons
+  server.args = {{"mc", "7,0,10"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 200 && bcCfg.mcAction[BC_BTN_CAMERA][BC_GESTURE_DOUBLE] == BC_ACTION_CAMERA);
   assert(g_nvs.count("bodycmf/cfg") == 1);
   // Invalid input changes nothing.
   server.args = {{"eeRestoreDelayMs", "9000"}};

@@ -6,7 +6,7 @@ const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
 const root=path.resolve(__dirname,'..');
 
 function firmware(){
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkCount:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkCount:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
   const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkCount:[1,10],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
   const state={cfg,wifi,supported:true,failNext:0,actions:[]};
@@ -49,7 +49,8 @@ async function check(html,label,zh=false){
     });
     await page.goto('http://body.test/',{waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>universalBootReady);
-    await page.evaluate(()=>showPage('settings'));
+    // Boot may still switch pages once; keep requesting Settings until the row is visible.
+    await page.waitForFunction(()=>{const r=document.getElementById('bodyComfortSettingsRow');if(r&&r.offsetParent)return true;showPage('settings');return false},null,{polling:100,timeout:10000});
     const row=page.locator('#bodyComfortSettingsRow');
     assert.equal(await row.count(),1,`${label}: settings row missing`);
     await page.waitForFunction(()=>document.getElementById('bodyComfortRowState')?.textContent!=='—');
@@ -57,7 +58,8 @@ async function check(html,label,zh=false){
     await row.click();
     await page.waitForFunction(()=>document.getElementById('panelBodyComfort')?.classList.contains('show'));
     if(zh)assert.equal(await page.locator('#panelBodyComfort .panelHero').textContent(),'车身舒适功能');
-    assert.equal(await page.locator('#panelBodyComfort select[id^="bcM"]').count(),18,'macro selects');
+    assert.equal(await page.locator('#panelBodyComfort select[id^="bcM"]').count(),24,'macro selects');
+    assert.deepEqual(await page.locator('#panelBodyComfort select[id^="bcM"]').evaluateAll(s=>s.slice(0,6).map(e=>e.id)),['bcM6_0','bcM6_1','bcM6_2','bcM7_0','bcM7_1','bcM7_2'],'voice and camera listed first');
     assert.equal(await page.locator('#bcRlm option').count(),3);
     assert.equal(await page.locator('#bcM0_0 option').count(),11,'macro actions');
     assert.equal(await page.locator('#bcSupport').isHidden(),true,'Juniper layout note hidden');
@@ -80,6 +82,9 @@ async function check(html,label,zh=false){
     await page.waitForTimeout(50);
     assert(requests.includes('POST /api/body/update?mc=1%2C2%2C8'),requests.join('\n'));
     assert.equal(fw.cfg.mcAction[1][2],8);
+    await page.evaluate(()=>{const s=document.getElementById('bcM7_0');s.value='9';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForTimeout(50);
+    assert.equal(fw.cfg.mcAction[7][0],9,'camera double -> fold mirrors');
     // Numeric save with validation.
     await page.locator('#bcRd').fill('6000');
     await page.locator('#bcEeSave').click();

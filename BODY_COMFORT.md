@@ -44,10 +44,10 @@
 - 에어백/RCM이 쓰는 원본 벨트 신호(0x40A/0x31A)는 건드리지 않습니다.
 
 ### 3) 핸들 버튼 매크로
-- 버튼: 좌/우 스크롤 휠 누름, 좌/우 휠 좌·우 틸트 (6개, 0x3C2 mux1).
-- 제스처: 더블 클릭, 트리플 클릭, 롱 클릭(기본 800 ms) → 18개 슬롯 각각에 동작 지정.
+- 버튼(8개, 0x3C2 mux1): 음성인식 버튼(48|2), 카메라 버튼(50|2), 좌/우 스크롤 휠 누름, 좌/우 휠 좌·우 틸트.
+- 제스처: 더블 클릭, 트리플 클릭, 롱 클릭(기본 800 ms) → 24개 슬롯 각각에 동작 지정.
 - 동작: 각 기능 ON/OFF 토글(Easy Entry, 미러 접기 옵션, 시트벨트, 비상등 깜빡임, 후진 비상등, 후진 후미등, 문열림 비상등), 비상등 N회 점멸 실행, 미러 접기/펴기, 카메라 화면.
-- 토글 결과는 1.5초 디바운스 후 NVS에 저장됩니다. 순정 단일 클릭 기능(음소거 등)은 그대로 동작합니다(차단 불가).
+- 토글 결과는 1.5초 디바운스 후 NVS에 저장됩니다. 각 버튼의 순정 기능(음성인식 열기, 카메라 화면 등)은 누를 때마다 그대로 같이 실행됩니다(차단 불가).
 
 ### 4) 비상깜빡이 N회(기본 3회) 점멸
 - 매크로 또는 대시보드 "Blink Now"로 실행. 이미 비상등이 켜져 있으면 실행하지 않습니다.
@@ -79,7 +79,7 @@
 | 0x353 | UI_status | UI_cameraActive | 카메라 상태 |
 | 0x3A1 | VCFRONT_vehicleStatus (mux0) | 2Row*Unbuckled | **TX** 2열 벨트 알람 |
 | 0x3B3 | UI_vehicleControl2 | UI_lightSwitch | **TX** 라이트 ON |
-| 0x3C2 | VCLEFT_switchStatus | mux0 hazardButtonPressed·창문 스위치 / mux1 휠 버튼·카메라 버튼 | 매크로 입력, **TX** 비상등/카메라 버튼 |
+| 0x3C2 | VCLEFT_switchStatus | mux0 hazardButtonPressed·창문 스위치 / mux1 휠 버튼·음성인식 버튼·카메라 버튼 | 매크로 입력, **TX** 비상등/카메라 버튼 |
 | 0x3F5 | VCFRONT_lighting | hazardLightRequest, indicatorLeftRequest | 비상등 상태 확인/점멸 카운트 |
 
 ## API
@@ -88,7 +88,7 @@
 - `POST /api/body/update?<key>=<value>...` — 부분 업데이트. 키: `eeEnabled, eeDoorMask(0-15), eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs(0-5000), eeMirrorFold, eeMirrorCamera, eeUnfoldKph(1-80), eeUnfoldHoldS(0-30), sbEnabled, sbSeatMask(0-7), mcEnabled, mcLongMs(500-2000), mcGapMs(200-800), mc=<button>,<gesture>,<action>, hzBlinkEnabled, hzBlinkCount(1-10), rvHazard, rvLight, rvLightMode(0 fog/1 lights/2 both), drHazard, drOffDelayMs(0-10000)`. 범위 밖 값은 400, 미지원 토폴로지는 409.
 - `POST /api/body/action?id=8|9|10` — 비상등 점멸 / 미러 접기·펴기 / 카메라.
 - `GET|POST /api/wifi/timing` — `slowStartEnabled, startDelayS(0-600), hideEnabled, hideDelayS(0-3600)`.
-- NVS: `bodycmf/cfg`(버전+체크섬 36바이트 blob, 손상 시 기본값). Reset Feature Settings가 `bodycmf`를 지웁니다.
+- NVS: `bodycmf/cfg`(버전 2 + 체크섬 42바이트 blob, 이전 36바이트 v1도 읽음, 손상 시 기본값). Reset Feature Settings가 `bodycmf`를 지웁니다.
 
 ## 검증 범위 / 미검증 항목
 

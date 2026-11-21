@@ -188,7 +188,8 @@ static void bodyComfortCfgLoad() {
   if (p.begin(BC_NVS_NAMESPACE, true)) {
     uint8_t blob[BC_CFG_BLOB_LEN] = {};
     const size_t len = p.getBytesLength(BC_NVS_KEY);
-    if (len == sizeof(blob) && p.getBytes(BC_NVS_KEY, blob, sizeof(blob)) == sizeof(blob)) {
+    if ((len == BC_CFG_BLOB_LEN || len == BC_CFG_BLOB_LEN_V1) &&
+        p.getBytes(BC_NVS_KEY, blob, len) == len) {
       if (!bodyComfortDeserializePure(blob, (uint32_t)len, c)) c = bodyComfortDefaultsPure();
     }
     p.end();

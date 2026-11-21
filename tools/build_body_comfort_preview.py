@@ -52,7 +52,7 @@ SIM_HTML = r"""
 SIM_JS = r"""
 (()=>{
   const P=window.__bcPreview,$=id=>document.getElementById(id),car=P.car;
-  const BTN=['왼쪽 스크롤 누름','오른쪽 스크롤 누름','왼쪽 스크롤 좌틸트','왼쪽 스크롤 우틸트','오른쪽 스크롤 좌틸트','오른쪽 스크롤 우틸트'];
+  const BTN=['왼쪽 스크롤 누름','오른쪽 스크롤 누름','왼쪽 스크롤 좌틸트','왼쪽 스크롤 우틸트','오른쪽 스크롤 좌틸트','오른쪽 스크롤 우틸트','음성인식 버튼','카메라 버튼'];
   const DOORS=[['FL','운전석'],['FR','조수석'],['RL','뒷좌석 좌'],['RR','뒷좌석 우']];
   $('bcSimFab').onclick=()=>$('bcSim').classList.toggle('show');
   $('bcSimClose').onclick=()=>$('bcSim').classList.remove('show');
@@ -68,7 +68,7 @@ SIM_JS = r"""
   $('bcSimSnow').onclick=()=>{car.snow=!car.snow;P.log('Snow '+(car.snow?'ON':'OFF'))};
   $('bcSimBelts').innerHTML=['좌','중','우'].map((n,i)=>`<button type="button" data-seat="${i}">${n}</button>`).join('');
   $('bcSimBelts').querySelectorAll('button').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.seat);car.belts[i]=!car.belts[i]});
-  $('bcSimBtn').innerHTML=BTN.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+  $('bcSimBtn').innerHTML=[6,7,0,1,2,3,4,5].map(i=>`<option value="${i}">${BTN[i]}</option>`).join('');
   document.querySelectorAll('#bcSim [data-g]').forEach(b=>b.onclick=()=>{P.log(`Wheel: ${BTN[$('bcSimBtn').value]} · ${b.textContent}`);P.macro(Number($('bcSimBtn').value),Number(b.dataset.g))});
   $('bcSimHaz').onclick=()=>P.userHazard();
   window.__bcPreviewRender=()=>{

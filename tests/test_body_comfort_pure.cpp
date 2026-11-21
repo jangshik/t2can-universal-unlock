@@ -154,6 +154,14 @@ static void testSwitchFields() {
   bcSetCameraButtonPure(m1, false);
   assert(bcGetBitsPure(m1, 50, 2) == 1u);
   assert(bcSwitchMuxPure(m1) == 1u);
+  // Voice (48|2) and camera (50|2) are macro buttons too.
+  assert(bcButtonStartBitPure(BC_BTN_VOICE) == 48u && bcButtonStartBitPure(BC_BTN_CAMERA) == 50u);
+  bcSetBitsPure(m1, 48, 2, BC_SWC_ON);
+  assert(bcButtonPressedPure(m1, BC_BTN_VOICE));
+  bcSetCameraButtonPure(m1, true);
+  assert(bcButtonPressedPure(m1, BC_BTN_CAMERA));
+  bcSetBitsPure(m1, 50, 2, 1u);  // SOFT/OFF is not a press
+  assert(!bcButtonPressedPure(m1, BC_BTN_CAMERA));
 
   uint8_t m0[8] = {};
   assert(!bcHazardButtonPressedPure(m0));
@@ -353,6 +361,8 @@ static void testConfigBlob() {
   c.mcEnabled = true;
   c.mcAction[BC_BTN_RIGHT_PRESS][BC_GESTURE_LONG] = BC_ACTION_RUN_HAZARD_BLINK;
   c.mcAction[BC_BTN_LEFT_TILT_RIGHT][BC_GESTURE_TRIPLE] = BC_ACTION_TOGGLE_DOOR_HAZARD;
+  c.mcAction[BC_BTN_VOICE][BC_GESTURE_DOUBLE] = BC_ACTION_TOGGLE_EASY_ENTRY;
+  c.mcAction[BC_BTN_CAMERA][BC_GESTURE_LONG] = BC_ACTION_MIRROR_FOLD_NOW;
   c.rvLight = true;
   c.rvLightMode = BC_REAR_LIGHT_FOG;
   c.drOffDelayMs = 4500;
@@ -364,6 +374,21 @@ static void testConfigBlob() {
   assert(r.eeEnabled && r.eeDoorMask == 0x05 && r.eeRestoreDelayMs == 1234 && r.eeMirrorFold);
   assert(r.sbEnabled && r.sbSeatMask == 0x02 && r.mcEnabled && r.rvLight);
   assert(r.rvLightMode == BC_REAR_LIGHT_FOG && r.drOffDelayMs == 4500 && r.eeWeatherBlock);
+  assert(BC_CFG_BLOB_LEN == 42u && blob[0] == 2u);
+  // v1 (36-byte, six wheel controls) blobs still load; voice/camera start empty.
+  uint8_t v1[BC_CFG_BLOB_LEN_V1];
+  memcpy(v1, blob, BC_CFG_BLOB_LEN_V1 - 1u);
+  v1[0] = 1u;
+  v1[BC_CFG_BLOB_LEN_V1 - 1u] = bcCfgBlobChecksumLenPure(v1, BC_CFG_BLOB_LEN_V1);
+  BodyComfortConfigPure m = {};
+  assert(bodyComfortDeserializePure(v1, BC_CFG_BLOB_LEN_V1, m));
+  assert(m.eeEnabled && m.eeRestoreDelayMs == 1234);
+  assert(m.mcAction[BC_BTN_RIGHT_PRESS][BC_GESTURE_LONG] == BC_ACTION_RUN_HAZARD_BLINK);
+  assert(m.mcAction[BC_BTN_VOICE][BC_GESTURE_DOUBLE] == BC_ACTION_NONE);
+  assert(m.mcAction[BC_BTN_CAMERA][BC_GESTURE_LONG] == BC_ACTION_NONE);
+  v1[0] = 2u;  // wrong version for the length
+  v1[BC_CFG_BLOB_LEN_V1 - 1u] = bcCfgBlobChecksumLenPure(v1, BC_CFG_BLOB_LEN_V1);
+  assert(!bodyComfortDeserializePure(v1, BC_CFG_BLOB_LEN_V1, m));
   blob[5] ^= 0x10u;
   assert(!bodyComfortDeserializePure(blob, BC_CFG_BLOB_LEN, r));
   assert(!r.eeEnabled);  // defaults on corruption
