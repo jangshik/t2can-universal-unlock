@@ -43,9 +43,11 @@ $cli = if (!$PrepareOnly) { (Get-Command $ArduinoCli -CommandType Application -E
 $sketchName = $sketchFiles[0].Name
 $firmwareName = $sketchFiles[0].BaseName
 
-# Exact menu settings from the ESP32S3 Dev Module screenshot. Unspecified
-# options (CPU, flash mode and PSRAM) retain the installed board defaults.
-$options = 'FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc,DFUOnBoot=default,MSCOnBoot=default,DebugLevel=none,EraseFlash=none,EventsCore=1,LoopCore=1,JTAGAdapter=default,UploadMode=default'
+# Exact menu settings from the ESP32S3 Dev Module screenshot. PSRAM is pinned
+# to OPI (T-2CAN ESP32-S3 N16R8): the board default is "Disabled", and a build
+# without PSRAM can leave too little internal RAM for the Wi-Fi access point.
+# Unspecified options (CPU, flash mode) retain the installed board defaults.
+$options = 'FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc,DFUOnBoot=default,MSCOnBoot=default,DebugLevel=none,EraseFlash=none,EventsCore=1,LoopCore=1,JTAGAdapter=default,UploadMode=default'
 $fqbn = "esp32:esp32:esp32s3:$options"
 $runRoot = Join-Path $output ((Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $failed = @()

@@ -110,10 +110,10 @@
 ## 검증 범위 / 미검증 항목
 
 - 통과: `tests/test_body_comfort_pure.cpp`(디코더, 제스처, 비상등 소유권, 창문 복구 계획, 시트벨트 체크섬, 설정 blob), `tests/test_body_comfort_runtime_host.cpp`(실제 런타임 헤더를 스텁으로 컴파일 후 가상 Juniper Body CAN 트래픽으로 10개 시나리오), `tests/test_wifi_ap_timing_host.py`(실제 web_api.h Wi-Fi 섹션 컴파일), `tests/test_dashboard_body_comfort.js`(Playwright: 소스/임베디드/중국어 대시보드).
-- ESP32-S3 컴파일/링크 통과 (2026-11-21, Arduino CLI 1.5.1, ESP32 core 3.3.12, autowp-mcp2515 1.3.1, `Compile-T2CAN-Variants.ps1`과 같은 보드 옵션):
-  - EN: 프로그램 1,605,453 / 3,145,728 B (51%), 정적 RAM 94,276 / 327,680 B (28%).
-  - zh-CN: 프로그램 1,609,165 B (51%), 정적 RAM 94,276 B. 임베디드 대시보드 gzip: EN 94.2 KB, zh-CN 97.9 KB (한도 100 KB).
-  - 기준 커밋 `7463e08` 대비: 플래시 +31.0 KB, RAM +816 B. `--warnings all`에서 새 코드 경고 0건.
+- ESP32-S3 컴파일/링크 통과 (Arduino CLI 1.5.1, ESP32 core 3.3.12, autowp-mcp2515 1.3.1, 16 MB flash, app3M_fat9M_16MB, **OPI PSRAM**, CDC on boot):
+  - EN: 프로그램 1,610,651 / 3,145,728 B (51%). zh-CN: 1,614,347 B (51%). 원본 `7463e08` 같은 옵션: 1,579,659 B.
+  - 임베디드 대시보드 gzip: EN 94.2 KB, zh-CN 97.9 KB (한도 100 KB). `--warnings all`에서 새 코드 경고 0건.
+  - ⚠️ 2026-11-21 첫 배포본은 PSRAM 설정이 빠진 채(보드 기본값 "Disabled") 빌드되어, 실기기에서 Wi-Fi AP가 뜨지 않는 문제가 보고됐습니다. `Compile-T2CAN-Variants.ps1`에 `PSRAM=opi`를 명시해 고쳤습니다. 반드시 OPI PSRAM으로 빌드하세요.
   - 실제 보드에 플래시/부팅해 보지는 않았습니다.
 - 실차 미검증 가정(실차 로그로 확인 필요):
   - `UI_vehicleControl3`(0x294) 창문 요청을 VC가 UI 이외 노드의 프레임으로도 수행하는지, `UI_windowPercentageRequest`가 "열림 %"인지.
