@@ -6,7 +6,7 @@ const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
 const root=path.resolve(__dirname,'..');
 
 function firmware(){
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
   const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
   const state={cfg,wifi,supported:true,failNext:0,actions:[]};
@@ -82,6 +82,11 @@ async function check(html,label,zh=false){
     assert.equal(await page.locator('#bcEe').isChecked(),true);
     assert(requests.includes('POST /api/body/update?eeEnabled=1'),requests.join('\n'));
     assert.match(await page.locator('#bodyComfortRowState').textContent(),zh?/1 开/:/1 ON/);
+    // Alternative open command toggle.
+    await page.locator('#bcEop').locator('xpath=..').click();
+    await page.waitForTimeout(80);
+    assert.equal(fw.cfg.eeOpenPercent,true);
+    assert.equal(await page.locator('#bcStWcmd').count(),1);
     // Door mask: front-right off.
     await page.locator('#bcDoor1').locator('xpath=..').click();
     await page.waitForFunction(()=>!document.getElementById('bcDoor1').checked);

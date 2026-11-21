@@ -146,6 +146,10 @@ struct BcWindowFramePure {
   uint8_t motionA, motionB;
   int16_t posRawA, posRawB;  // signed 9-bit raw (1.25 per step, +265 offset)
   uint8_t posStateA, posStateB;
+  uint8_t unavailA, unavailB;  // mux1 windowCtrlUnavailable: 0 NONE 1 UNEXPECTED 2 SWITCH_PRESSED
+                               // 3 PINCH 4 THERMAL_LIMIT 5 UNCALIBRATED 6 VEHICLE_IN_DRIVE 7 WINDOW_MOVING
+  uint8_t stopA, stopB;        // mux1 windowStopReason: 0 NONE 1 DOOR_OPEN_TRIM_PROTECT 2 NEW_REQUEST
+                               // 3 TARGET_REACHED 4 STOP_REQUEST 5 FULL_OPEN_SOFT_STOP 6 STATE_TIMEOUT
 };
 
 static inline int16_t bcSigned9Pure(uint32_t raw) {
@@ -167,6 +171,10 @@ static inline bool bcDecodeWindowFramePure(const uint8_t *d, uint8_t dlc,
   } else {
     out.posStateA = (uint8_t)bcGetBitsPure(d, 49, 3);
     out.posStateB = (uint8_t)bcGetBitsPure(d, 52, 3);
+    out.unavailA = (uint8_t)bcGetBitsPure(d, 38, 3);
+    out.unavailB = (uint8_t)bcGetBitsPure(d, 45, 3);
+    out.stopA = (uint8_t)bcGetBitsPure(d, 11, 3);
+    out.stopB = (uint8_t)bcGetBitsPure(d, 28, 3);
   }
   return true;
 }
@@ -264,12 +272,40 @@ static inline bool bcComposeWindowRequestPure(uint8_t *d, uint8_t doorMask,
                                               uint8_t request, uint8_t pct) {
   if (d == nullptr || (doorMask & 0x0Fu) == 0u || request > BC_WINREQ_OPEN) return false;
   if (pct > 100u) pct = 100u;
-  bcSetBitsPure(d, 42, 6, (uint32_t)(request == BC_WINREQ_PERCENT ? pct / 5u : 0u));
+  // GOTO_OPEN also carries 100 % in case the VC reads the percentage field.
+  const uint8_t field = request == BC_WINREQ_PERCENT ? (uint8_t)(pct / 5u)
+                      : request == BC_WINREQ_OPEN ? 20u : 0u;
+  bcSetBitsPure(d, 42, 6, field);
   for (uint8_t door = 0; door < BC_DOOR_COUNT; ++door)
     bcSetBitsPure(d, bcWindowRequestedBitPure(door), 1, (doorMask >> door) & 1u);
   bcSetBitsPure(d, 52, 3, request);
   return true;
 }
+
+// When the UI does not send 0x294 continuously, a window command is built from
+// the newest stock 0x294 seen. One-shot request fields from that old frame are
+// cleared so they are never replayed: light flash (0|2), key pair response
+// (6|2), headlight pulse (12), short horn (17), fascia camera wash (26), rear
+// seat adjustment (28|3, 32|3), close trunk (55), rear-display seat requests
+// (61, 63).
+static inline void bcClearVc3TransientPure(uint8_t *d) {
+  if (d == nullptr) return;
+  bcSetBitsPure(d, 0, 2, 0u);
+  bcSetBitsPure(d, 6, 2, 0u);
+  bcSetBitsPure(d, 12, 1, 0u);
+  bcSetBitsPure(d, 17, 1, 0u);
+  bcSetBitsPure(d, 26, 1, 0u);
+  bcSetBitsPure(d, 28, 3, 0u);
+  bcSetBitsPure(d, 32, 3, 0u);
+  bcSetBitsPure(d, 55, 1, 0u);
+  bcSetBitsPure(d, 61, 1, 0u);
+  bcSetBitsPure(d, 63, 1, 0u);
+}
+
+static constexpr uint8_t BC_WINDOW_CMD_FRAMES = 5u;
+static constexpr uint32_t BC_VC3_SYNTH_AFTER_MS = 250u;
+static constexpr uint32_t BC_VC3_SYNTH_INTERVAL_MS = 100u;
+static constexpr uint32_t BC_VC3_TEMPLATE_MAX_AGE_MS = 60000u;
 
 // ─── Gear / speed / weather / UI / lighting ─────────────────────────────
 enum BcGearPure : uint8_t { BC_GEAR_INVALID = 0, BC_GEAR_P = 1, BC_GEAR_R = 2, BC_GEAR_N = 3, BC_GEAR_D = 4 };
@@ -694,6 +730,7 @@ struct BodyComfortConfigPure {
   bool eeWeatherBlock;       // rain / snow blocks the window drop
   bool eeWeatherStrict;      // missing weather data also blocks
   uint16_t eeRestoreDelayMs; // after the door latches closed
+  bool eeOpenPercent;        // open with GOTO_PERCENT 100 instead of GOTO_OPEN
   bool eeMirrorFold;         // fold mirrors when Easy Entry acts
   bool eeMirrorCamera;       // show the camera while mirrors are folded by us
   uint8_t eeUnfoldKph;       // unfold above this speed in D ...
@@ -822,7 +859,7 @@ static inline void bodyComfortSerializePure(const BodyComfortConfigPure &c,
                      (c.eeMirrorCamera ? 0x10u : 0u) | (c.sbEnabled ? 0x20u : 0u) |
                      (c.mcEnabled ? 0x40u : 0u) | (c.hzBlinkEnabled ? 0x80u : 0u));
   out[2] = (uint8_t)((c.rvHazard ? 0x01u : 0u) | (c.rvLight ? 0x02u : 0u) |
-                     (c.drHazard ? 0x04u : 0u));
+                     (c.drHazard ? 0x04u : 0u) | (c.eeOpenPercent ? 0x08u : 0u));
   out[3] = c.eeDoorMask;
   out[4] = (uint8_t)(c.eeRestoreDelayMs & 0xFFu);
   out[5] = (uint8_t)(c.eeRestoreDelayMs >> 8);
@@ -873,6 +910,7 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
   c.rvHazard = (in[2] & 0x01u) != 0u;
   c.rvLight = (in[2] & 0x02u) != 0u;
   c.drHazard = (in[2] & 0x04u) != 0u;
+  c.eeOpenPercent = (in[2] & 0x08u) != 0u;
   c.eeDoorMask = in[3];
   c.eeRestoreDelayMs = (uint16_t)(in[4] | (in[5] << 8));
   c.eeUnfoldKph = in[6];

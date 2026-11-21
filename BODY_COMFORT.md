@@ -32,6 +32,7 @@
   - 원래 CLOSED → `GOTO_CLOSED`, VENT → `GOTO_VENT`, 부분 개방 → `GOTO_PERCENT`(학습한 전/폐 위치로 계산, 5 % 단위), 원래 완전 개방 → 아무것도 안 함.
   - 부분 개방인데 아직 전/폐 위치를 학습하지 못했다면 활짝 열린 채로 두지 않고 VENT로 복구합니다.
   - "원래 위치"는 문이 닫혀 있고 창문이 1.5초 이상 정지해 있던 값만 사용하므로, 손잡이를 당길 때의 순정 short-drop 위치를 원래 위치로 착각하지 않습니다.
+- 창문 명령은 0x294 순정 프레임 뒤 5프레임. 0x294가 250 ms 안에 안 오면 최근(60초 이내) 0x294로 직접 만들어 보냅니다(일회성 요청 필드는 0으로). 열기 명령은 `GOTO_OPEN` 또는 `GOTO_PERCENT 100`(대시보드 "Alternative open command"). 실시간 상태에 0x294 수신, 마지막 창문 명령, 창문별 차단/정지 이유를 표시.
 - **비/눈**(`APP_environment` 0x25C `Rainy`/`Snowy`)이면 창문을 내리지 않습니다. "날씨 정보 없음도 차단" 옵션을 켜면 신호가 없을 때도 차단합니다.
 - 운전석 창문 스위치를 조작하면 해당 창문의 자동 복구를 취소합니다(사용자 우선).
 - **사이드미러 접기(선택)**: Easy Entry가 동작할 때 `UI_mirrorFoldRequest=RETRACT`.
@@ -111,8 +112,8 @@
 
 - 통과: `tests/test_body_comfort_pure.cpp`(디코더, 제스처, 비상등 소유권, 창문 복구 계획, 시트벨트 체크섬, 설정 blob), `tests/test_body_comfort_runtime_host.cpp`(실제 런타임 헤더를 스텁으로 컴파일 후 가상 Juniper Body CAN 트래픽으로 10개 시나리오), `tests/test_wifi_ap_timing_host.py`(실제 web_api.h Wi-Fi 섹션 컴파일), `tests/test_dashboard_body_comfort.js`(Playwright: 소스/임베디드/중국어 대시보드).
 - ESP32-S3 컴파일/링크 통과 (Arduino CLI 1.5.1, ESP32 core 3.3.12, autowp-mcp2515 1.3.1, 16 MB flash, app3M_fat9M_16MB, **OPI PSRAM**, CDC on boot):
-  - EN: 프로그램 1,610,651 / 3,145,728 B (51%). zh-CN: 1,614,347 B (51%). 원본 `7463e08` 같은 옵션: 1,579,659 B.
-  - 임베디드 대시보드 gzip: EN 94.2 KB, zh-CN 97.9 KB (한도 100 KB). `--warnings all`에서 새 코드 경고 0건.
+  - EN: 프로그램 1,612,435 / 3,145,728 B (51%). zh-CN: 1,616,083 B (51%). 원본 `7463e08` 같은 옵션: 1,579,659 B.
+  - 임베디드 대시보드 gzip: EN 94.4 KB, zh-CN 98.0 KB (한도 100 KB). `--warnings all`에서 새 코드 경고 0건.
   - ⚠️ 2026-11-21 첫 배포본은 PSRAM 설정이 빠진 채(보드 기본값 "Disabled") 빌드되어, 실기기에서 Wi-Fi AP가 뜨지 않는 문제가 보고됐습니다. `Compile-T2CAN-Variants.ps1`에 `PSRAM=opi`를 명시해 고쳤습니다. 반드시 OPI PSRAM으로 빌드하세요.
   - 실제 보드에 플래시/부팅해 보지는 않았습니다.
 - 실차 미검증 가정(실차 로그로 확인 필요):

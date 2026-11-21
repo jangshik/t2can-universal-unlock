@@ -102,7 +102,14 @@ static void testWindowCompose() {
   for (uint8_t bit = 0; bit < 42; ++bit) assert(bcGetBitsPure(d, bit, 1) == 1u);
   for (uint8_t bit = 55; bit < 64; ++bit) assert(bcGetBitsPure(d, bit, 1) == 1u);
   assert(bcComposeWindowRequestPure(d, 1u, BC_WINREQ_OPEN, 0));
-  assert(bcGetBitsPure(d, 42, 6) == 0u && bcGetBitsPure(d, 52, 3) == BC_WINREQ_OPEN);
+  assert(bcGetBitsPure(d, 42, 6) == 20u && bcGetBitsPure(d, 52, 3) == BC_WINREQ_OPEN);  // carries 100 %
+  assert(bcComposeWindowRequestPure(d, 1u, BC_WINREQ_CLOSED, 0) && bcGetBitsPure(d, 42, 6) == 0u);
+  uint8_t t[8];
+  memset(t, 0xFF, sizeof(t));
+  bcClearVc3TransientPure(t);
+  assert(bcGetBitsPure(t, 0, 2) == 0u && bcGetBitsPure(t, 17, 1) == 0u && bcGetBitsPure(t, 55, 1) == 0u);
+  assert(bcGetBitsPure(t, 28, 3) == 0u && bcGetBitsPure(t, 61, 1) == 0u && bcGetBitsPure(t, 63, 1) == 0u);
+  assert(bcGetBitsPure(t, 2, 1) == 1u && bcGetBitsPure(t, 40, 2) == 3u);  // persistent fields untouched
   assert(!bcComposeWindowRequestPure(d, 0u, BC_WINREQ_OPEN, 0));
   assert(!bcComposeWindowRequestPure(d, 1u, 5u, 0));
 }
@@ -366,6 +373,7 @@ static void testConfigBlob() {
   c.rvLight = true;
   c.rvLightMode = BC_REAR_LIGHT_FOG;
   c.drOffDelayMs = 4500;
+  c.eeOpenPercent = true;
   uint8_t blob[BC_CFG_BLOB_LEN];
   bodyComfortSerializePure(c, blob);
   BodyComfortConfigPure r = {};
@@ -374,6 +382,7 @@ static void testConfigBlob() {
   assert(r.eeEnabled && r.eeDoorMask == 0x05 && r.eeRestoreDelayMs == 1234 && r.eeMirrorFold);
   assert(r.sbEnabled && r.sbSeatMask == 0x02 && r.mcEnabled && r.rvLight);
   assert(r.rvLightMode == BC_REAR_LIGHT_FOG && r.drOffDelayMs == 4500 && r.eeWeatherBlock);
+  assert(r.eeOpenPercent);
   assert(BC_CFG_BLOB_LEN == 50u && blob[0] == 3u);
   // v1 (36-byte, six wheel controls) blobs still load; voice/camera start empty.
   uint8_t v1[BC_CFG_BLOB_LEN_V1];

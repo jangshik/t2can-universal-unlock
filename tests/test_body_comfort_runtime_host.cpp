@@ -213,6 +213,8 @@ struct Car {
   uint8_t pedalRaw = 0;     // 0.4 % steps
   uint8_t brake = 0;        // 0 OFF 1 ON
   bool handle[2] = {false, false};
+  int vc3Mode = 0;                 // 0 periodic, 1 only while vc3Once, 2 never
+  bool vc3Once = false;
   uint8_t lockSimple = 1;          // 1 UNLOCKED, 2 LOCKED, 0 = frame absent
   bool frontLocked[2] = {false, false};
   int32_t kph10 = 0;
@@ -277,7 +279,10 @@ static void sendFrames() {
   rx(0x3C2, d);
   memset(d, 0, 8); d[2] = 0x11; rx(0x273, d);
   memset(d, 0, 8); rx(0x3B3, d);
-  memset(d, 0, 8); d[0] = 0x40; rx(0x294, d);
+  if (car.vc3Mode == 0 || (car.vc3Mode == 1 && car.vc3Once)) {
+    memset(d, 0, 8); d[0] = 0x40; d[2] = 0xC0; bcSetBitsPure(d, 17, 1, car.vc3Once ? 1u : 0u); rx(0x294, d);
+    car.vc3Once = false;
+  }
   memset(d, 0, 8);
   for (uint8_t s = 0; s < 3; ++s) bcSetBitsPure(d, (uint8_t)(36 + s * 2), 2, car.rearUnbuckled[s]);
   d[7] = teslaAdditiveChecksumPure(0x3A1, d);
@@ -368,11 +373,11 @@ static void testEasyEntryOpenAndRestore() {
   run(2000);
   // Driver door opens in P: FL goes fully down.
   car.latch[BC_DOOR_FL] = 1;
-  run(400);
+  run(700);
   auto w = takeTx(0x294);
-  assert(w.size() == BC_ONE_SHOT_FRAMES);
+  assert(w.size() == BC_WINDOW_CMD_FRAMES);
   for (const auto &r : w) {
-    assert(bcGetBitsPure(r.data, 52, 3) == BC_WINREQ_OPEN);
+    assert(bcGetBitsPure(r.data, 52, 3) == BC_WINREQ_OPEN && bcGetBitsPure(r.data, 42, 6) == 20u);
     assert(bcGetBitsPure(r.data, 48, 4) == 0x1u);  // FL only
     assert(r.data[0] == 0x40);                      // stock bytes preserved
   }
@@ -384,9 +389,9 @@ static void testEasyEntryOpenAndRestore() {
   car.latch[BC_DOOR_FL] = 2;
   run(500);
   assert(takeTx(0x294).empty());
-  run(800);
+  run(1100);
   w = takeTx(0x294);
-  assert(w.size() == BC_ONE_SHOT_FRAMES);
+  assert(w.size() == BC_WINDOW_CMD_FRAMES);
   assert(bcGetBitsPure(w[0].data, 52, 3) == BC_WINREQ_CLOSED);
   assert(bcGetBitsPure(w[0].data, 48, 4) == 0x1u);
   assert(bcState.entry[BC_DOOR_FL].phase == BC_ENTRY_IDLE);
@@ -395,7 +400,7 @@ static void testEasyEntryOpenAndRestore() {
   // Rear-left partially open (50 %): restore uses GOTO_PERCENT 50.
   g_tx.clear();
   car.latch[BC_DOOR_RL] = 1;
-  run(400);
+  run(700);
   w = takeTx(0x294);
   assert(!w.empty() && bcGetBitsPure(w[0].data, 48, 4) == 0x4u);
   car.winPosState[BC_DOOR_RL] = BC_WINPOS_FULL; car.winPos[BC_DOOR_RL] = 200;
@@ -992,6 +997,63 @@ static void testListenOnly() {
   assert(server.lastBody.find("\"listenOnly\":false") != std::string::npos);
 }
 
+static void testWindowDelivery() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.eeEnabled = true;
+  setCfg(c);
+  // UI sends 0x294 once (with a horn tap in it), then stays silent.
+  car.vc3Mode = 1; car.vc3Once = true;
+  run(2000);
+  car.latch[BC_DOOR_FL] = 1;
+  run(1500);
+  auto w = takeTx(0x294);
+  assert(w.size() == BC_WINDOW_CMD_FRAMES);
+  for (const auto &f : w) {
+    assert(bcGetBitsPure(f.data, 52, 3) == BC_WINREQ_OPEN && bcGetBitsPure(f.data, 48, 4) == 1u);
+    assert(f.data[2] == 0xC0);                    // persistent stock fields kept
+    assert(bcGetBitsPure(f.data, 17, 1) == 0u);   // old horn request not replayed
+    assert(bcGetBitsPure(f.data, 6, 2) == 0u);    // old key-pair response not replayed
+  }
+  assert(bcState.lastWinOutcome == BC_WIN_OUTCOME_SENT && bcState.lastWinSynth == BC_WINDOW_CMD_FRAMES);
+  assert(bcState.entry[BC_DOOR_FL].phase == BC_ENTRY_OPENED);
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("synth 5 · SENT") != std::string::npos);
+  // Restore also goes out without stock frames.
+  g_tx.clear();
+  car.winPosState[BC_DOOR_FL] = BC_WINPOS_FULL; car.winPos[BC_DOOR_FL] = 200;
+  run(500);
+  car.latch[BC_DOOR_FL] = 2;
+  run(2500);
+  w = takeTx(0x294);
+  assert(!w.empty() && bcGetBitsPure(w[0].data, 52, 3) == BC_WINREQ_CLOSED);
+  // Never seen: nothing sent, outcome recorded, entry released.
+  resetAll();
+  setCfg(c);
+  car.vc3Mode = 2;
+  run(2000);
+  car.latch[BC_DOOR_FL] = 1;
+  run(2500);
+  assert(takeTx(0x294).empty());
+  assert(bcState.lastWinOutcome == BC_WIN_OUTCOME_NO_0x294 && bcState.winCmdTimeouts == 1);
+  assert(bcState.entry[BC_DOOR_FL].phase == BC_ENTRY_IDLE);
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("\"vc3\":\"never seen\"") != std::string::npos);
+  // Alternative open command: GOTO_PERCENT 100.
+  resetAll();
+  c.eeOpenPercent = true;
+  setCfg(c);
+  run(2000);
+  car.latch[BC_DOOR_RR] = 1;
+  run(800);
+  w = takeTx(0x294);
+  assert(!w.empty() && bcGetBitsPure(w[0].data, 52, 3) == BC_WINREQ_PERCENT);
+  assert(bcGetBitsPure(w[0].data, 42, 6) == 20u && bcGetBitsPure(w[0].data, 48, 4) == 8u);
+  server.args = {{"eeOpenPercent", "0"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 200 && !bcCfg.eeOpenPercent);
+}
+
 int main() {
   bodyComfortStart();
   assert(bodyComfortTaskHandle != nullptr);
@@ -1009,6 +1071,7 @@ int main() {
   testKickdown();
   testDoorHandleFrunk();
   testListenOnly();
+  testWindowDelivery();
   std::puts("body_comfort_runtime host: all tests passed");
   return 0;
 }

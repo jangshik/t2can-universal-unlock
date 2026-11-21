@@ -27,6 +27,8 @@ TEXT = {
         "wx": "Block in rain / snow", "wxD": "Uses the vehicle rain / snow detection.",
         "wxs": "Block when weather is unknown", "wxsD": "Fail closed if the weather signal is missing.",
         "rd": "RESTORE DELAY (ms)",
+        "eop": "Alternative open command", "eopD": "Send 'go to 100 %' instead of 'go to open'. Try this if the window does not move; check Window command below.",
+        "stVc3": "0x294 window request frame", "stWcmd": "Last window command", "stWdiag": "Window blocked / stop reason",
         "mf": "Fold mirrors", "mfD": "Fold the side mirrors when Easy Entry acts.",
         "cam": "Camera while folded", "camD": "Show the camera view in D/N while this feature has the mirrors folded.",
         "uk": "UNFOLD ABOVE (km/h)", "uh": "FOR (s)",
@@ -100,6 +102,8 @@ TEXT = {
         "wx": "雨雪天禁止", "wxD": "使用车辆的雨/雪检测信号。",
         "wxs": "天气未知时禁止", "wxsD": "天气信号缺失时不执行。",
         "rd": "恢复延迟 (ms)",
+        "eop": "备用开窗指令", "eopD": "用“到 100 %”代替“打开”。如果车窗不动请试试，并查看下方的车窗指令。",
+        "stVc3": "0x294 车窗请求帧", "stWcmd": "最近的车窗指令", "stWdiag": "车窗受阻 / 停止原因",
         "mf": "折叠后视镜", "mfD": "便捷上车动作时折叠外后视镜。",
         "cam": "折叠时显示摄像头", "camD": "本功能折叠后视镜期间，在 D/N 挡显示摄像头画面。",
         "uk": "展开车速高于 (km/h)", "uh": "持续 (s)",
@@ -215,7 +219,7 @@ function build(){
   const root=$b('bcBody');if(!root)return;
   const h=[];
   h.push(`<div class="softNote" id="bcSupport" hidden></div>`);
-  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
+  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcEop',T.eop,T.eopD)+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
   h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
   let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
   m+=`<div class="softNote" style="padding:4px 16px 8px">${esc(T.collapsedHint)}</div>`;
@@ -227,7 +231,7 @@ function build(){
   h.push(lbl(T.dh),card(tg('bcDh',T.dh,T.dhD)+`<div class="fieldgrid">${num('bcDd',T.dd,0,10000)}</div>`+btnRow(['bcDhSave',T.save,1])));
   h.push(lbl(T.kd),card(tg('bcKd',T.kd,T.kdD)+`<div class="listrow"><div><div class="listkey">${esc(T.kdTgt)}</div></div>${sel('bcKdTgt',T.kdTgt,T.kdTgtO,'max-width:62%')}</div>`+`<div class="fieldgrid">${num('bcKdT',T.kdT,10,100)}</div>`+tg('bcKdRp',T.kdRp,T.kdRpD)+`<div class="fieldgrid">${num('bcKdR',T.kdR,0,90)}</div>`+tg('bcKdRb',T.kdRb,T.kdRbD)+`<div class="listrow"><div><div class="listkey">${esc(T.kdRm)}</div></div>${sel('bcKdRm',T.kdRm,T.kdRmO,'max-width:62%')}</div>`+btnRow(['bcKdSave',T.save,1])));
   h.push(lbl(T.hd),card(tg('bcHd',T.hd,T.hdD)+tg('bcHd0',T.hdDr,'')+tg('bcHd1',T.hdPs,'')+`<div class="fieldgrid">${num('bcHdS',T.hdS,1,10)}</div>`+btnRow(['bcHdSave',T.save,1])+`<div class="listrow"><div><div class="listkey">${esc(T.hdA)}</div></div>${macroSel('bcHdA',T.hdA)}</div>`));
-  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStKd',T.stKd)+stRow('bcStHd',T.stHd)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
+  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStWcmd',T.stWcmd)+stRow('bcStVc3',T.stVc3)+stRow('bcStWdiag',T.stWdiag)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStKd',T.stKd)+stRow('bcStHd',T.stHd)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
   h.push(`<div class="softNote" id="bcSaveState" aria-live="polite"></div>`);
   root.innerHTML=h.join('');
 }
@@ -256,7 +260,7 @@ function render(d){
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
   setText('bcStWx',l.weather||'—');setText('bcStDoors',l.doors||'—');setText('bcStWin',l.windows||'—');
-  setText('bcStEe',l.easyEntry||'—');setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
+  setText('bcStEe',l.easyEntry||'—');setText('bcStWcmd',l.windowCmd||'—');setText('bcStVc3',l.vc3||'—');setText('bcStWdiag',l.windowsDiag||'—');setChk('bcEop',c.eeOpenPercent);setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
   setText('bcStCam',l.camera||'—');
   setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
   setText('bcStMacro',s.macroEvents?`${T.btn[s.lastMacroButton]||'?'} · ${T.ges[s.lastMacroGesture]||'?'} → ${T.act[s.lastMacroAction]||T.notSet} · ${s.lastMacroResult||'—'}`:'—');
@@ -286,7 +290,7 @@ async function save(params,el){
   finally{bcBusy--}
 }
 const bindToggle=(id,key)=>{const e=$b(id);if(e)e.onchange=()=>save({[key]:e.checked?1:0},e)};
-[['bcEe','eeEnabled'],['bcWx','eeWeatherBlock'],['bcWxs','eeWeatherStrict'],['bcMf','eeMirrorFold'],['bcCam','eeMirrorCamera'],['bcSb','sbEnabled'],['bcMc','mcEnabled'],['bcHb','hzBlinkEnabled'],['bcRh','rvHazard'],['bcRl','rvLight'],['bcDh','drHazard'],['bcKd','kdEnabled'],['bcKdRp','kdReleaseOnPedal'],['bcKdRb','kdReleaseOnBrake'],['bcHd','dhEnabled']].forEach(([id,k])=>bindToggle(id,k));
+[['bcEe','eeEnabled'],['bcEop','eeOpenPercent'],['bcWx','eeWeatherBlock'],['bcWxs','eeWeatherStrict'],['bcMf','eeMirrorFold'],['bcCam','eeMirrorCamera'],['bcSb','sbEnabled'],['bcMc','mcEnabled'],['bcHb','hzBlinkEnabled'],['bcRh','rvHazard'],['bcRl','rvLight'],['bcDh','drHazard'],['bcKd','kdEnabled'],['bcKdRp','kdReleaseOnPedal'],['bcKdRb','kdReleaseOnBrake'],['bcHd','dhEnabled']].forEach(([id,k])=>bindToggle(id,k));
 const maskOf=(prefix,n)=>{let m=0;for(let i=0;i<n;i++)if($b(prefix+i)?.checked)m|=1<<i;return m};
 for(let i=0;i<4;i++){const e=$b('bcDoor'+i);if(e)e.onchange=()=>save({eeDoorMask:maskOf('bcDoor',4)},e)}
 for(let i=0;i<3;i++){const e=$b('bcSeat'+i);if(e)e.onchange=()=>save({sbSeatMask:maskOf('bcSeat',3)},e)}

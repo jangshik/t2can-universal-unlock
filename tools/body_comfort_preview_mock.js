@@ -4,7 +4,7 @@
 (()=>{
   const base=window.fetch;
   const json=(v,status=200)=>Promise.resolve(new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}}));
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
   const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:0,setupMode:false};
   const wifiStart=Date.now();
@@ -17,7 +17,8 @@
   const log=msg=>{car.log.unshift(new Date().toLocaleTimeString()+'  '+msg);car.log.length=Math.min(car.log.length,12);window.__bcPreviewRender?.()};
   const tx=(what)=>{if(car.listenOnly){log('(listen-only, not sent) '+what);return}stats.txOk++;log('TX '+what)};
   const posName=p=>p<=0?'CLOSED':p>=100?'OPEN':p<=10?'VENT':'PARTIAL';
-  function setWindow(i,p,why){car.win[i]=p;tx(`0x294 ${DOORS[i]} ${p===100?'GOTO_OPEN':p===0?'GOTO_CLOSED':'GOTO_PERCENT '+p+'%'}${why?' · '+why:''}`)}
+  let lastWin='';
+  function setWindow(i,p,why){lastWin=`${p===100?(cfg.eeOpenPercent?'PERCENT':'OPEN'):p===0?'CLOSED':'PERCENT'} ${DOORS[i]} · stock 5 + synth 0 · SENT`;car.win[i]=p;tx(`0x294 ${DOORS[i]} ${p===100?'GOTO_OPEN':p===0?'GOTO_CLOSED':'GOTO_PERCENT '+p+'%'}${why?' · '+why:''}`)}
   function hazardWanted(){return(cfg.rvHazard&&car.gear==='R')||st.doorHazActive||Date.now()<st.blinkUntil}
   function hazardService(){
     const want=hazardWanted();
@@ -94,7 +95,7 @@
       live:{gear:car.gear,speedKph:car.kph,weather:car.rain&&car.snow?'RAIN+SNOW':car.rain?'RAIN':car.snow?'SNOW':'CLEAR',
         doors:DOORS.map((d,i)=>d+':'+(car.door[i]?'OPEN':'CLOSED')).join(' '),
         windows:DOORS.map((d,i)=>`${d}:${posName(car.win[i])}(${car.win[i]}%)`).join(' '),
-        easyEntry:DOORS.map((d,i)=>d+':'+st.entry[i]).join(' '),
+        easyEntry:DOORS.map((d,i)=>d+':'+st.entry[i]).join(' '),windowCmd:lastWin||'—',vc3:'0.1 s ago · '+(stats.txOk+40)+' rx',windowsDiag:DOORS.map(d=>d+':NONE/'+(lastWin?'TARGET':'NONE')).join(' '),
         mirrors:`L:${car.mirrors} R:${car.mirrors}`,mirrorFoldedByFeature:st.foldedByUs,camera:car.camera?'ON':'OFF',
         hazard:car.hazard,hazardOwned:st.hazardOwned,pedalPct:car.pedal,brake:car.brake?'ON':'OFF',kickdown:!cfg.kdEnabled?'OFF':kd.kicked?'KICKED':'ARMED',handles:`DRIVER:${car.handle[0]?'PULLED':'-'} PASSENGER:${car.handle[1]?'PULLED':'-'}`,lock:car.locked?'LOCKED':'UNLOCKED',listenOnly:car.listenOnly,blinkActive:Date.now()<st.blinkUntil,reverseHazard:cfg.rvHazard&&car.gear==='R',doorHazard:st.doorHazActive,rearLight:st.rearLight},
       stats:{...stats,lastMacroButton:lastMacro.button,lastMacroGesture:lastMacro.gesture,lastMacroAction:lastMacro.action,lastMacroResult:lastMacro.result}};

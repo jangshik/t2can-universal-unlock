@@ -132,6 +132,15 @@ struct BcStateRuntime {
   BcEntryDoorRuntime entry[BC_DOOR_COUNT];
   BcOneShotRuntime winCmd;
   uint8_t winCmdMask, winCmdRequest, winCmdPct;
+  uint8_t winCmdStockSent, winCmdSynthSent;
+  uint32_t winCmdLastSynthMs;
+  bool winCmdStockSeen;
+  // Newest stock 0x294 (template for synthesized window commands).
+  uint8_t vc3Template[8]; uint32_t vc3Ms; bool vc3Valid; uint32_t vc3RxCount;
+  // Last finished window command, for diagnostics.
+  uint8_t lastWinRequest, lastWinMask, lastWinStock, lastWinSynth, lastWinOutcome;
+  uint32_t lastWinMs;
+  uint8_t winUnavail[BC_DOOR_COUNT], winStop[BC_DOOR_COUNT];
 
   // Mirrors / camera.
   BcOneShotRuntime mirrorCmd;
@@ -280,6 +289,8 @@ static void bodyComfortObserveWindow(uint8_t side, const uint8_t *d, uint8_t dlc
   } else {
     bcState.winPosState[a] = w.posStateA;
     bcState.winPosState[b] = w.posStateB;
+    bcState.winUnavail[a] = w.unavailA; bcState.winUnavail[b] = w.unavailB;
+    bcState.winStop[a] = w.stopA; bcState.winStop[b] = w.stopB;
     bcState.winM1Ms[side] = now; bcState.winM1Valid[side] = true;
   }
   portEXIT_CRITICAL(&bcMux);
@@ -384,10 +395,15 @@ static void bodyComfortObserveVehicleControl3(uint8_t bus, const uint8_t *d, uin
   memcpy(out, d, 8);
   bool send = false;
   portENTER_CRITICAL(&bcMux);
+  memcpy(bcState.vc3Template, d, 8);
+  bcState.vc3Ms = now;
+  bcState.vc3Valid = true;
+  bcState.vc3RxCount++;
   BcOneShotRuntime &w = bcState.winCmd;
   if (w.active && w.framesLeft > 0u && (uint32_t)(now - w.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) {
+    bcState.winCmdStockSeen = true;
     send = bcComposeWindowRequestPure(out, bcState.winCmdMask, bcState.winCmdRequest, bcState.winCmdPct);
-    if (send) w.framesLeft--;
+    if (send) { w.framesLeft--; bcState.winCmdStockSent++; }
   }
   portEXIT_CRITICAL(&bcMux);
   if (send) bodyComfortTransmit(bus, BC_ID_UI_VEHICLE_CONTROL3, out, 8);
@@ -778,14 +794,46 @@ static void bcEntryServiceLocked(uint32_t now) {
     bcMirrorCommandLocked(now, BC_MIRROR_REQ_RETRACT);
 }
 
-static void bcWindowCommandServiceLocked(uint32_t now) {
+enum BcWinOutcomeRuntime : uint8_t {
+  BC_WIN_OUTCOME_NONE = 0,
+  BC_WIN_OUTCOME_SENT,
+  BC_WIN_OUTCOME_NO_0x294,     // no stock frame and no template to build one from
+};
+
+// Returns true and fills `synth` when a window-command frame must be built
+// from the 0x294 template (no stock 0x294 arrived after the command started).
+static bool bcWindowCommandServiceLocked(uint32_t now, uint8_t synth[8]) {
   BcOneShotRuntime &w = bcState.winCmd;
   if (w.active) {
     const bool done = w.framesLeft == 0u;
-    if (!done && (uint32_t)(now - w.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) return;
+    if (!done && (uint32_t)(now - w.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) {
+      const bool templateFresh = bcState.vc3Valid &&
+          (uint32_t)(now - bcState.vc3Ms) <= BC_VC3_TEMPLATE_MAX_AGE_MS;
+      if (!bcState.winCmdStockSeen && templateFresh &&
+          (uint32_t)(now - w.startMs) >= BC_VC3_SYNTH_AFTER_MS &&
+          (bcState.winCmdSynthSent == 0u ||
+           (uint32_t)(now - bcState.winCmdLastSynthMs) >= BC_VC3_SYNTH_INTERVAL_MS)) {
+        memcpy(synth, bcState.vc3Template, 8);
+        bcClearVc3TransientPure(synth);
+        if (bcComposeWindowRequestPure(synth, bcState.winCmdMask, bcState.winCmdRequest,
+                                       bcState.winCmdPct)) {
+          w.framesLeft--;
+          bcState.winCmdSynthSent++;
+          bcState.winCmdLastSynthMs = now;
+          return true;
+        }
+      }
+      return false;
+    }
     // At least one delivered frame counts: stock 0x294 cadence is not guaranteed.
-    const bool timedOut = w.framesLeft >= BC_ONE_SHOT_FRAMES;
+    const bool timedOut = w.framesLeft >= BC_WINDOW_CMD_FRAMES;
     if (timedOut) bcState.winCmdTimeouts++;
+    bcState.lastWinRequest = bcState.winCmdRequest;
+    bcState.lastWinMask = bcState.winCmdMask;
+    bcState.lastWinStock = bcState.winCmdStockSent;
+    bcState.lastWinSynth = bcState.winCmdSynthSent;
+    bcState.lastWinOutcome = timedOut ? (uint8_t)BC_WIN_OUTCOME_NO_0x294 : (uint8_t)BC_WIN_OUTCOME_SENT;
+    bcState.lastWinMs = now;
     for (uint8_t i = 0; i < BC_DOOR_COUNT; ++i) {
       BcEntryDoorRuntime &e = bcState.entry[i];
       if (!e.inFlight || ((bcState.winCmdMask >> i) & 1u) == 0u) continue;
@@ -812,7 +860,7 @@ static void bcWindowCommandServiceLocked(uint32_t now) {
       }
     }
     w = {};
-    return;
+    return false;
   }
 
   // Pick the first due door, then batch every due door sharing its command.
@@ -822,10 +870,12 @@ static void bcWindowCommandServiceLocked(uint32_t now) {
     if ((e.phase == BC_ENTRY_OPEN_PENDING || e.phase == BC_ENTRY_RESTORE_PENDING) &&
         !e.inFlight && (int32_t)(now - e.dueMs) >= 0) { lead = (int8_t)i; break; }
   }
-  if (lead < 0) return;
+  if (lead < 0) return false;
+  const uint8_t openReq = bcCfg.eeOpenPercent ? (uint8_t)BC_WINREQ_PERCENT : (uint8_t)BC_WINREQ_OPEN;
+  const uint8_t openPct = bcCfg.eeOpenPercent ? 100u : 0u;
   const BcEntryDoorRuntime &l = bcState.entry[lead];
-  const uint8_t request = l.phase == BC_ENTRY_OPEN_PENDING ? (uint8_t)BC_WINREQ_OPEN : l.plan.request;
-  const uint8_t pct = l.phase == BC_ENTRY_OPEN_PENDING ? 0u : l.plan.percent;
+  const uint8_t request = l.phase == BC_ENTRY_OPEN_PENDING ? openReq : l.plan.request;
+  const uint8_t pct = l.phase == BC_ENTRY_OPEN_PENDING ? openPct : l.plan.percent;
   uint8_t mask = 0;
   for (uint8_t i = 0; i < BC_DOOR_COUNT; ++i) {
     BcEntryDoorRuntime &e = bcState.entry[i];
@@ -833,19 +883,23 @@ static void bcWindowCommandServiceLocked(uint32_t now) {
     const bool open = e.phase == BC_ENTRY_OPEN_PENDING;
     const bool restore = e.phase == BC_ENTRY_RESTORE_PENDING;
     if (!open && !restore) continue;
-    const uint8_t r = open ? (uint8_t)BC_WINREQ_OPEN : e.plan.request;
-    const uint8_t p = open ? 0u : e.plan.percent;
+    const uint8_t r = open ? openReq : e.plan.request;
+    const uint8_t p = open ? openPct : e.plan.percent;
     if (r != request || p != pct) continue;
     e.inFlight = true;
     mask |= (uint8_t)(1u << i);
   }
-  if (mask == 0u) return;
+  if (mask == 0u) return false;
   bcState.winCmdMask = mask;
   bcState.winCmdRequest = request;
   bcState.winCmdPct = pct;
+  bcState.winCmdStockSent = 0;
+  bcState.winCmdSynthSent = 0;
+  bcState.winCmdStockSeen = false;
   w.active = true;
-  w.framesLeft = BC_ONE_SHOT_FRAMES;
+  w.framesLeft = BC_WINDOW_CMD_FRAMES;
   w.startMs = now;
+  return false;
 }
 
 // ─── Mirrors / camera ────────────────────────────────────────────────────
@@ -1067,7 +1121,8 @@ static void bodyComfortServiceTick(uint32_t now) {
     else bcState.lastMacroResult = r ? r : "OK";
   }
   bcEntryServiceLocked(now);
-  bcWindowCommandServiceLocked(now);
+  uint8_t synth[8];
+  const bool synthSend = bcWindowCommandServiceLocked(now, synth);
   bcMirrorServiceLocked(now);
   bcHazardServiceLocked(now);
   bcOneShotDoneLocked(now, bcState.frunkCmd, bcState.frunkOpens, bcState.frunkRefused);
@@ -1082,6 +1137,7 @@ static void bodyComfortServiceTick(uint32_t now) {
     save = true;
   }
   portEXIT_CRITICAL(&bcMux);
+  if (synthSend) bodyComfortTransmit(bodyComfortActiveBus(), BC_ID_UI_VEHICLE_CONTROL3, synth, 8);
   for (uint8_t i = 0; i < existingCount; ++i) {
     const char *r = bodyComfortToggleExistingFeature(existing[i]);
     portENTER_CRITICAL(&bcMux);
@@ -1188,6 +1244,7 @@ static String bodyComfortJson() {
   jw.boolean("eeWeatherBlock", c.eeWeatherBlock);
   jw.boolean("eeWeatherStrict", c.eeWeatherStrict);
   jw.u32("eeRestoreDelayMs", c.eeRestoreDelayMs);
+  jw.boolean("eeOpenPercent", c.eeOpenPercent);
   jw.boolean("eeMirrorFold", c.eeMirrorFold);
   jw.boolean("eeMirrorCamera", c.eeMirrorCamera);
   jw.u32("eeUnfoldKph", c.eeUnfoldKph);
@@ -1261,6 +1318,43 @@ static String bodyComfortJson() {
   jw.string("doors", doors);
   jw.string("windows", windows);
   jw.string("easyEntry", entry);
+  {
+    static const char *const unavailNames[] = {"NONE", "UNEXPECTED", "SWITCH", "PINCH", "THERMAL",
+                                               "UNCALIBRATED", "IN_DRIVE", "MOVING"};
+    static const char *const stopNames[] = {"NONE", "DOOR_OPEN_TRIM", "NEW_REQ", "TARGET", "STOP_REQ",
+                                            "FULL_OPEN", "TIMEOUT", "?"};
+    static const char *const reqNames[] = {"IDLE", "PERCENT", "VENT", "CLOSED", "OPEN"};
+    String diag;
+    for (uint8_t i = 0; i < BC_DOOR_COUNT; ++i) {
+      const uint8_t side = (i == BC_DOOR_FL || i == BC_DOOR_RL) ? 0u : 1u;
+      const bool wFresh = bcAgeFreshPure(now, s.winM1Ms[side], s.winM1Valid[side], BC_WINDOW_FRESH_MS);
+      if (i) diag += ' ';
+      diag += doorKeys[i]; diag += ':';
+      if (!wFresh) { diag += '?'; continue; }
+      diag += unavailNames[s.winUnavail[i] & 7u]; diag += '/'; diag += stopNames[s.winStop[i] & 7u];
+    }
+    jw.string("windowsDiag", diag);
+    String vc3;
+    if (s.vc3Valid) {
+      const unsigned long tenths = (unsigned long)((now - s.vc3Ms) / 100u);
+      vc3 += tenths / 10u; vc3 += '.'; vc3 += tenths % 10u; vc3 += " s ago · ";
+      vc3 += (unsigned long)s.vc3RxCount; vc3 += " rx";
+    } else {
+      vc3 = "never seen";
+    }
+    jw.string("vc3", vc3);
+    String cmd = "—";
+    if (s.lastWinOutcome != BC_WIN_OUTCOME_NONE) {
+      cmd = String(reqNames[s.lastWinRequest <= 4u ? s.lastWinRequest : 0u]) + " ";
+      for (uint8_t i = 0; i < BC_DOOR_COUNT; ++i)
+        if ((s.lastWinMask >> i) & 1u) { cmd += doorKeys[i]; cmd += ' '; }
+      cmd += "· stock "; cmd += (unsigned)s.lastWinStock;
+      cmd += " + synth "; cmd += (unsigned)s.lastWinSynth;
+      cmd += s.lastWinOutcome == BC_WIN_OUTCOME_SENT ? " · SENT" : " · NO 0x294";
+      cmd += " · "; cmd += (unsigned long)((now - s.lastWinMs) / 1000u); cmd += " s ago";
+    }
+    jw.string("windowCmd", cmd);
+  }
   jw.string("mirrors", String("L:") + bcMirrorName(s.mirrorFold[0]) + " R:" + bcMirrorName(s.mirrorFold[1]));
   jw.boolean("mirrorFoldedByFeature", s.mirrorFoldedByUs);
   jw.string("camera", cameraFresh ? (s.cameraActive ? "ON" : "OFF") : "?");
@@ -1381,6 +1475,7 @@ static void httpBodyComfortUpdate() {
   BC_BOOL_FIELD("eeWeatherBlock", eeWeatherBlock)
   BC_BOOL_FIELD("eeWeatherStrict", eeWeatherStrict)
   BC_UINT_FIELD("eeRestoreDelayMs", 0u, 5000u, eeRestoreDelayMs, uint16_t)
+  BC_BOOL_FIELD("eeOpenPercent", eeOpenPercent)
   BC_BOOL_FIELD("eeMirrorFold", eeMirrorFold)
   BC_BOOL_FIELD("eeMirrorCamera", eeMirrorCamera)
   BC_UINT_FIELD("eeUnfoldKph", 1u, 80u, eeUnfoldKph, uint8_t)
