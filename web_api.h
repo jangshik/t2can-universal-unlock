@@ -1,5 +1,6 @@
 #pragma once
 #include "text_format_arduino.h"
+#include "body_comfort_pure.h"
 
 // WEB API / OTA / DASHBOARD SERVICE
 // Kept in the same translation unit to preserve proven runtime behavior.
@@ -1444,6 +1445,7 @@ static const char *canTxTraceSourceName(uint8_t source) {
   if (source == CAN_TX_TRACE_SOURCE_AUTO_BLINKER) return "AUTO_BLINKER";
   if (source == CAN_TX_TRACE_SOURCE_S3XY_BUTTON) return "S3XY_BUTTON";
   if (source == CAN_TX_TRACE_SOURCE_DRIVER_WINDOW_LAB) return "DRIVER_WINDOW_LAB";
+  if (source == CAN_TX_TRACE_SOURCE_BODY_COMFORT) return "BODY_COMFORT";
   return nullptr;
 }
 
@@ -1572,6 +1574,13 @@ static void httpCanBTxTraceCsv() {
 // ─── Wi-Fi access-point configuration ────────────────────────
 static String wifiApActiveSsid;
 static String wifiApActivePassword;
+// AP timing (slow start / hidden SSID). Stored with the AP credentials in the
+// "wifiap" namespace, so Reset Feature Settings preserves it like the SSID.
+static WifiApTimingPure wifiApTiming = wifiApTimingDefaultsPure();
+static volatile bool wifiApHiddenActive = false;
+static volatile bool wifiApStarted = false;
+static volatile uint32_t wifiApStartedMs = 0;
+static volatile uint32_t wifiApStartDelayAppliedMs = 0;
 
 static void wifiApBuildDefaultSsid(String &ssid) {
   uint8_t mac[6] = {0};
@@ -1630,9 +1639,34 @@ static bool wifiApPersistConfig(const String &ssid, const String &password) {
   return a > 0 && b > 0;
 }
 
+static void wifiApTimingLoad() {
+  WifiApTimingPure t = wifiApTimingDefaultsPure();
+  Preferences p;
+  if (p.begin("wifiap", true)) {
+    t.slowStartEnabled = p.getBool("slowEn", t.slowStartEnabled);
+    t.startDelayS = p.getUShort("startDly", t.startDelayS);
+    t.hideEnabled = p.getBool("hideEn", t.hideEnabled);
+    t.hideDelayS = p.getUShort("hideDly", t.hideDelayS);
+    p.end();
+  }
+  wifiApTimingSanitizePure(t);
+  wifiApTiming = t;
+}
+
+static bool wifiApTimingPersist(const WifiApTimingPure &t) {
+  Preferences p;
+  if (!p.begin("wifiap", false)) return false;
+  const bool ok = p.putBool("slowEn", t.slowStartEnabled) > 0 &&
+                  p.putUShort("startDly", t.startDelayS) > 0 &&
+                  p.putBool("hideEn", t.hideEnabled) > 0 &&
+                  p.putUShort("hideDly", t.hideDelayS) > 0;
+  p.end();
+  return ok;
+}
+
 static bool wifiApStartOnce(const String &ssid, const String &password) {
   for (uint8_t attempt = 0; attempt < 3; attempt++) {
-    if (WiFi.softAP(ssid.c_str(), password.c_str())) {
+    if (WiFi.softAP(ssid.c_str(), password.c_str(), 1, wifiApHiddenActive ? 1 : 0)) {
       wifiApActiveSsid = ssid;
       wifiApActivePassword = password;
       return true;
@@ -1683,6 +1717,114 @@ static String wifiApStatusJson() {
 static void httpWifiStatus() {
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", wifiApStatusJson());
+}
+
+// Re-announce the running AP with the requested SSID visibility. Connected
+// clients may be dropped once; saved networks reconnect to a hidden SSID.
+static bool wifiApSetHidden(bool hidden) {
+  if (!wifiApStarted || !wifiApActiveSsid.length()) return false;
+  if (!WiFi.softAP(wifiApActiveSsid.c_str(), wifiApActivePassword.c_str(), 1, hidden ? 1 : 0))
+    return false;
+  wifiApHiddenActive = hidden;
+  T2CAN_SERIAL_PRINTF("WiFi: SSID %s\n", hidden ? "hidden" : "visible");
+  return true;
+}
+
+static void wifiApTimingService() {
+  const bool setup = vehicleProfileSetupMode || vehicleProfileNvsError;
+  const WifiApTimingPure t = wifiApTiming;
+  if (!wifiApHiddenActive &&
+      wifiApHideDuePure(t, setup, wifiApStarted, (uint32_t)millis(), wifiApStartedMs)) {
+    if (!wifiApSetHidden(true)) wifiApStartedMs = (uint32_t)millis();  // retry later
+  } else if (wifiApHiddenActive && (setup || !t.hideEnabled)) {
+    (void)wifiApSetHidden(false);
+  }
+}
+
+static String wifiApTimingJson() {
+  const WifiApTimingPure t = wifiApTiming;
+  String j;
+  j.reserve(200);
+  JsonWriterArduino jw(j);
+  jw.boolean("ok", true);
+  jw.boolean("slowStartEnabled", t.slowStartEnabled);
+  jw.u32("startDelayS", t.startDelayS);
+  jw.boolean("hideEnabled", t.hideEnabled);
+  jw.u32("hideDelayS", t.hideDelayS);
+  jw.boolean("hiddenNow", wifiApHiddenActive);
+  jw.u32("startDelayAppliedS", wifiApStartDelayAppliedMs / 1000u);
+  jw.u32("apUptimeS", wifiApStarted ? ((uint32_t)millis() - wifiApStartedMs) / 1000u : 0u);
+  jw.boolean("setupMode", vehicleProfileSetupMode || vehicleProfileNvsError);
+  jw.finish();
+  return j;
+}
+
+static void httpWifiTimingStatus() {
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", wifiApTimingJson());
+}
+
+static bool wifiTimingArgU16(const char *name, uint16_t maxValue, uint16_t &out, bool &present) {
+  present = server.hasArg(name);
+  if (!present) return true;
+  const String v = server.arg(name);
+  if (v.length() == 0u || v.length() > 4u) return false;
+  uint32_t value = 0;
+  for (size_t i = 0; i < v.length(); ++i) {
+    const char ch = v.charAt(i);
+    if (ch < '0' || ch > '9') return false;
+    value = value * 10u + (uint32_t)(ch - '0');
+  }
+  if (value > maxValue) return false;
+  out = (uint16_t)value;
+  return true;
+}
+
+static bool wifiTimingArgBool(const char *name, bool &out, bool &present) {
+  present = server.hasArg(name);
+  if (!present) return true;
+  const String v = server.arg(name);
+  if (v == "1" || v == "true") { out = true; return true; }
+  if (v == "0" || v == "false") { out = false; return true; }
+  return false;
+}
+
+static void httpWifiTimingApply() {
+  WifiApTimingPure next = wifiApTiming;
+  bool present = false, any = false;
+  if (!wifiTimingArgBool("slowStartEnabled", next.slowStartEnabled, present)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid slowStartEnabled\"}");
+    return;
+  }
+  any |= present;
+  if (!wifiTimingArgU16("startDelayS", 600u, next.startDelayS, present)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"startDelayS must be 0-600\"}");
+    return;
+  }
+  any |= present;
+  if (!wifiTimingArgBool("hideEnabled", next.hideEnabled, present)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid hideEnabled\"}");
+    return;
+  }
+  any |= present;
+  if (!wifiTimingArgU16("hideDelayS", 3600u, next.hideDelayS, present)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"hideDelayS must be 0-3600\"}");
+    return;
+  }
+  any |= present;
+  if (!any) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"no settings\"}");
+    return;
+  }
+  wifiApTimingSanitizePure(next);
+  if (!wifiApTimingPersist(next)) {
+    server.send(500, "application/json", "{\"ok\":false,\"error\":\"NVS write failed\"}");
+    return;
+  }
+  wifiApTiming = next;
+  // Hiding is applied by the web loop after this response has been sent.
+  server.sendHeader("Connection", "close");
+  server.send(200, "application/json", wifiApTimingJson());
 }
 
 static void httpWifiApply() {
@@ -3274,7 +3416,7 @@ static bool resetFirmwareSettingsPreserveProfileAndBle() {
   // old migrations.
   static const char *const clearNamespaces[] = {
     "nag", "summon", "lab3f8", "ulc", "alc293lab", "countrylab", "r79lab", "r79", "lanegraph",
-    "researchcap", "features", "labv3fd", "preheat"
+    "researchcap", "features", "labv3fd", "preheat", "bodycmf"
   };
   bool ok = true;
   for (const char *ns : clearNamespaces) {
@@ -5851,6 +5993,18 @@ static void httpResetRuntimeStats() {
 }
 
 static void webTask(void *arg) {
+  wifiApTimingLoad();
+  {
+    // Wi-Fi slow start: keep the radio off for the configured delay. CAN, BLE
+    // and every feature-local start wait run independently of this task.
+    const uint32_t delayMs = wifiApStartDelayMsPure(
+        wifiApTiming, vehicleProfileSetupMode || vehicleProfileNvsError);
+    if (delayMs > 0u) {
+      T2CAN_SERIAL_PRINTF("WiFi: slow start, AP in %lu s\n", (unsigned long)(delayMs / 1000u));
+      wifiApStartDelayAppliedMs = delayMs;
+      vTaskDelay(pdMS_TO_TICKS(delayMs));
+    }
+  }
   T2CAN_SERIAL_PRINTLN("WiFi: Starting AP...");
   WiFi.disconnect(true);
   delay(100);
@@ -5866,6 +6020,8 @@ static void webTask(void *arg) {
   IPAddress ip = WiFi.softAPIP();
 #endif
   bootCaptureMarkOnce(&bootCapWifiReadyMs);
+  wifiApStartedMs = (uint32_t)millis();
+  wifiApStarted = true;
 #if T2CAN_SERIAL_DIAGNOSTICS
   T2CAN_SERIAL_PRINTF("AP: SSID=%s IP=%s\n", wifiApActiveSsid.c_str(), ip.toString().c_str());
 #endif
@@ -5881,6 +6037,8 @@ static void webTask(void *arg) {
   server.on("/api/system/reboot", HTTP_POST, httpRebootT2Can);
   server.on("/api/wifi/status", HTTP_GET, httpWifiStatus);
   server.on("/api/wifi/apply", HTTP_POST, httpWifiApply);
+  server.on("/api/wifi/timing", HTTP_GET, httpWifiTimingStatus);
+  server.on("/api/wifi/timing", HTTP_POST, httpWifiTimingApply);
   server.on("/api/ota/status", HTTP_GET, httpOtaStatus);
   server.on("/update", HTTP_POST, httpOtaFinish, httpOtaUpload);
 
@@ -5925,6 +6083,9 @@ static void webTask(void *arg) {
     server.on("/api/features/preheat", HTTP_POST, httpFeaturePreheat);
     server.on("/api/preheat/stats", HTTP_GET, httpPreheatStats);
     server.on("/api/preheat/set", HTTP_POST, httpPreheatSet);
+    server.on("/api/body/config", HTTP_GET, httpBodyComfortConfig);
+    server.on("/api/body/update", HTTP_POST, httpBodyComfortUpdate);
+    server.on("/api/body/action", HTTP_POST, httpBodyComfortAction);
     server.on("/api/features/s3xy", HTTP_POST, httpFeatureS3xy);
     server.on("/api/das/stats", HTTP_GET, httpDasTelemetryStats);
     server.on("/api/r79/stats", HTTP_GET, httpR79Stats);
@@ -5990,9 +6151,15 @@ static void webTask(void *arg) {
   }
   server.begin();
 
+  uint32_t lastWifiTimingServiceMs = 0;
   for (;;) {
     server.handleClient();
     webBeat++;
+    const uint32_t nowMs = (uint32_t)millis();
+    if ((uint32_t)(nowMs - lastWifiTimingServiceMs) >= 500u) {
+      lastWifiTimingServiceMs = nowMs;
+      wifiApTimingService();
+    }
     vTaskDelay(1);
   }
 }

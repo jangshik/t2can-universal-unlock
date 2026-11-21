@@ -692,6 +692,7 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="listrow clickable modelSMenuHidden" data-panel="panelPedalMap" id="pedalMapSettingsRow"><div><div class="listkey">Pedal Response</div><div class="listdesc" id="pedalMapSettingsDesc">Change acceleration response for this drive.</div></div><span class="chev">›</span></div>
 <div class="listrow clickable modelSMenuHidden" data-panel="panelApDriveProfile" id="apDriveProfileSettingsRow"><div><div class="listkey">AP Accel / Regen</div><div class="listdesc" id="apDriveProfileDesc">Use Chill acceleration and chosen regen during AP.</div></div><span class="chev">›</span></div>
 <div class="listrow clickable" data-panel="panelBatteryPreheat" id="batteryPreheatSettingsRow"><div><div class="listkey">Battery Preheating</div><div class="listdesc">Preheat the battery and view thermal status.</div></div><span class="chev">›</span></div>
+<div class="listrow clickable" data-panel="panelBodyComfort" id="bodyComfortSettingsRow"><div><div class="listkey">Body Comfort</div><div class="listdesc" id="bodyComfortDesc">Easy Entry, hazards, rear belts and wheel macros.</div></div><div class="rowRight"><span class="value" id="bodyComfortRowState">—</span><span class="chev">›</span></div></div>
 <div class="listrow"><div><div class="listkey">S3XY</div><div class="listdesc" id="s3xyFeatureDesc">Use S3XY buttons for assigned vehicle actions.</div></div><label class="toggle"><input id="s3xyFeatureToggle" type="checkbox"/><span class="track"></span></label></div>
 </section>
 <div class="sectionhead"><div class="sectiontitle">Experimental</div></div>
@@ -971,10 +972,14 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="detailSectionLabel">WI-FI ACCESS POINT</div>
 <section class="card"><div class="fieldgrid"><div class="field full"><label>WI-FI NAME (SSID)</label><input autocomplete="off" id="wifiSsid" maxlength="32" placeholder="T2CAN-XXXX" type="text"/></div><div class="field full"><label>NEW PASSWORD · LEAVE BLANK TO KEEP CURRENT</label><div style="display:flex;align-items:center;gap:8px"><input autocomplete="new-password" id="wifiPassword" maxlength="63" minlength="8" placeholder="Leave blank to keep current password" style="min-width:0;flex:1" type="password"/><button class="textbtn" id="wifiPasswordToggle" style="flex:0 0 auto;padding:5px" type="button">Show</button></div></div></div><div class="controlgrid"><button class="btn primary" id="wifiApply" style="grid-column:1/-1">Apply Wi-Fi Settings</button></div></section>
 <div class="softNote" id="wifiPasswordHint">Wi-Fi settings are saved in NVS and preserved by Reset Feature Settings. Applying a change restarts only the access point, not CAN, BLE or the MCU. Reconnect to the new Wi-Fi if iPhone Auto-Join is disabled; the dashboard will resume automatically.</div>
+<div class="detailSectionLabel">WI-FI TIMING</div>
+<section class="card" id="wifiTimingCard"><div class="settingToggleRow"><div><div class="listkey">Wi-Fi Slow Start</div><div class="listdesc">Start the access point after a delay. CAN and every other feature start normally.</div></div><label class="toggle"><input id="wifiSlowToggle" type="checkbox"/><span class="track"></span></label></div><div class="settingToggleRow"><div><div class="listkey">Hide Wi-Fi Name</div><div class="listdesc" id="wifiHideDesc">Hide the SSID after the access point has been on for the set time.</div></div><label class="toggle"><input id="wifiHideToggle" type="checkbox"/><span class="track"></span></label></div><div class="fieldgrid"><div class="field"><label>START DELAY (s)</label><input id="wifiStartDelay" inputmode="numeric" max="600" min="0" step="1" type="number"/></div><div class="field"><label>HIDE AFTER (s)</label><input id="wifiHideDelay" inputmode="numeric" max="3600" min="0" step="1" type="number"/></div></div><div class="controlgrid"><button class="btn primary" id="wifiTimingApply" style="grid-column:1/-1">Save Wi-Fi Timing</button></div></section>
+<div class="softNote" id="wifiTimingNote">A hidden network stays reachable from phones that already saved it. Profile setup mode always starts the access point immediately and never hides it. Hiding restarts the access point once.</div>
 <div class="detailSectionLabel">BLUETOOTH DATA</div>
 <section class="card"><div class="detailRow clickable destructiveRow" id="s3ResetAll"><div><div class="detailLeft">Reset Bluetooth Data</div><div class="detailSub">Remove all S3XY devices, action mappings, BLE bonds and cached discovery data, then restart T-2CAN.</div></div><span class="chev">›</span></div></section>
 <div class="softNote">Bluetooth Master and Global Auto Connect settings are preserved. Bluetooth must be ON to fully remove the controller's BLE bond database.</div>
 </div></section>
+<section class="panel" id="panelBodyComfort"><div class="panelin"><div class="paneltop"><button aria-label="Back" class="backbtn"><svg aria-hidden="true" class="backIcon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">Settings</div></div><div class="panelHero">Body Comfort</div><div class="panelSub">HW4 Model Y Juniper body features. Each feature stays OFF until enabled. Commands are copies of live vehicle frames on the Body CAN.</div><div id="bcBody"></div></div></section>
 <!-- Settings detail panels -->
 <section class="panel" id="panelContinuousAp"><div class="panelin"><div class="paneltop"><button aria-label="Back" class="backbtn"><svg aria-hidden="true" class="backIcon" viewbox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">Settings</div></div><div class="panelHero">Continuous AP (Experimental)</div><div class="panelSub">Re-engage AP after a signaled lane change when the vehicle is ready.</div>
 <section class="card">
@@ -2060,7 +2065,7 @@ setInterval(()=>{
   if(preheatSaved&&preheatSaved.packSeen===true)renderPreheatBms(preheatSaved);
 },3000);
 
-const pollLast={preheat:0,serviceMode:0,fsdLab:0,driverMonitoringRecovery:0,isaSuppressionRecovery:0,nag:0,blink:0,sum:0,sys:0,s3:0,ulc:0,autoLc:0,country:0,r79:0,humanLab:0,pedalMap:0,homeSnap:0,settingsSnap:0,heartbeat:0};
+const pollLast={preheat:0,body:0,wifiTiming:0,serviceMode:0,fsdLab:0,driverMonitoringRecovery:0,isaSuppressionRecovery:0,nag:0,blink:0,sum:0,sys:0,s3:0,ulc:0,autoLc:0,country:0,r79:0,humanLab:0,pedalMap:0,homeSnap:0,settingsSnap:0,heartbeat:0};
 function activePanelId(){return document.querySelector('.panel.show')?.id||''}
 function pollDue(k,ms,fn,now,force=false){if(force||now-pollLast[k]>=ms){pollLast[k]=now;fn()}}
 function pollTick(force=false){
@@ -2072,11 +2077,12 @@ function pollTick(force=false){
     else if(p==='panelR79')pollDue('r79',800,fetchR79,now,force);
     else if(p==='panelTlssc')pollDue('sum',1200,fetchSum,now,force);
     else if(p==='panelDiag'){pollDue('sys',1600,fetchSys,now,force);pollDue('s3',1500,fetchS3,now,force)}
-    else if(p==='panelWireless')pollDue('s3',1000,fetchS3,now,force);
+    else if(p==='panelWireless'){pollDue('s3',1000,fetchS3,now,force);pollDue('wifiTiming',3000,()=>window.fetchWifiTiming?.(),now,force)}
     else if(p==='panelDevice'||p==='panelDeviceDiag'||p==='panelPair')pollDue('s3',800,fetchS3,now,force);
     else if(p==='panelOta'||p==='panelAbout')pollDue('sys',2500,fetchSys,now,force);
     else if(p==='panelServiceModeSettings')pollDue('serviceMode',1500,fetchServiceMode,now,force);
     else if(p==='panelBatteryPreheat')pollDue('preheat',1500,fetchPreheat,now,force);
+    else if(p==='panelBodyComfort')pollDue('body',1000,()=>window.fetchBodyComfort?.(),now,force);
     else if(p==='panelFsdVisualisation')pollDue('fsdLab',1000,fetchFsdLab,now,force);
     else if(p==='panelContinuousAp')pollDue('continuousAp',800,fetchContinuousAp,now,force);
     else if(p==='panelVisionControl')pollDue('visionControl',800,fetchVisionControlLab,now,force);
@@ -2312,6 +2318,97 @@ setInterval(()=>{if(universalBootReady){pollTick(false);renderHeartbeatSnapshot(
     if(otaJustUpdated)history.replaceState(null,'',location.pathname);
   }
   boot();
+})();</script>
+<script>(()=>{
+const T={"back":"Back","settings":"Settings","rowKey":"Body Comfort","rowDesc":"Easy Entry, hazards, rear belts and wheel macros.","title":"Body Comfort","sub":"HW4 Model Y Juniper body features. Each feature stays OFF until enabled. Commands are copies of live vehicle frames on the Body CAN.","unsupported":"Requires Body + Chassis (Model Y Juniper) or Model Y L. This vehicle profile cannot use these features.","experimental":"This profile is not Juniper / Model Y L: the frame layout is unverified, treat every feature as experimental.","ee":"Easy Entry","eeD":"In P, an opening door lowers its window fully. Closing the door returns it to the previous position.","doors":["Front left door","Front right door","Rear left door","Rear right door"],"wx":"Block in rain / snow","wxD":"Uses the vehicle rain / snow detection.","wxs":"Block when weather is unknown","wxsD":"Fail closed if the weather signal is missing.","rd":"RESTORE DELAY (ms)","mf":"Fold mirrors","mfD":"Fold the side mirrors when Easy Entry acts.","cam":"Camera while folded","camD":"Show the camera view in D/N while this feature has the mirrors folded.","uk":"UNFOLD ABOVE (km/h)","uh":"FOR (s)","ufD":"Mirrors folded by this feature unfold in D after the speed stays above this value for this time. Mirrors you fold yourself are never unfolded.","sb":"Rear Seat-Belt Chime Off","sbD":"Suppress the unbuckled chime for the selected 2nd-row seats.","seats":["2nd row left","2nd row centre","2nd row right"],"mc":"Steering Wheel Macros","mcD":"Double, triple or long press on a wheel control runs an action. The stock single-press function still runs.","lp":"LONG PRESS (ms)","gp":"CLICK GAP (ms)","btn":["Left scroll · press","Right scroll · press","Left scroll · tilt left","Left scroll · tilt right","Right scroll · tilt left","Right scroll · tilt right"],"ges":["Double","Triple","Long"],"act":["None","Toggle Easy Entry","Toggle mirror fold","Toggle rear belt chime","Toggle hazard blink","Toggle reverse hazards","Toggle reverse light","Toggle door hazards","Blink hazards","Fold / unfold mirrors","Camera view"],"hb":"Hazard Blink","hbD":"Blink the hazards a set number of times from a macro or the button below.","hc":"BLINKS","run":"Blink Now","rh":"Reverse Hazards","rhD":"Hazards on while in R, off again when leaving R.","rl":"Reverse Rear Light","rlD":"Turn the rear lights on while in R.","rlm":["Rear fog","Lights ON","Rear fog + lights ON"],"mode":"Rear light mode","dh":"Door-Open Hazards (D/R)","dhD":"A door opened in D or R turns the hazards on until every door is closed again.","dd":"OFF DELAY AFTER CLOSE (ms)","save":"Save","saving":"Saving…","saved":"Saved","failed":"Not saved","status":"LIVE STATUS","foldNow":"Fold / Unfold Mirrors","camNow":"Camera View","stBus":"Bus","stGear":"Gear · speed","stWx":"Weather","stDoors":"Doors","stWin":"Windows","stEe":"Easy Entry","stMir":"Mirrors","stCam":"Camera","stHaz":"Hazards","stCnt":"Counters","on":"ON","off":"OFF","na":"N/A","wifiLabel":"WI-FI TIMING","wifiSlow":"Wi-Fi Slow Start","wifiSlowD":"Start the access point after a delay. CAN and every other feature start normally.","wifiHide":"Hide Wi-Fi Name","wifiHideD":"Hide the SSID after the access point has been on for the set time.","wifiStart":"START DELAY (s)","wifiHideAfter":"HIDE AFTER (s)","wifiSave":"Save Wi-Fi Timing","wifiNote":"A hidden network stays reachable from phones that already saved it. Profile setup mode always starts the access point immediately and never hides it. Hiding restarts the access point once."};
+const $b=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let bc=null,bcBusy=0,wt=null;
+const tg=(id,key,desc)=>`<div class="settingToggleRow"><div><div class="listkey">${esc(key)}</div>${desc?`<div class="listdesc">${esc(desc)}</div>`:''}</div><label class="toggle"><input id="${id}" type="checkbox"/><span class="track"></span></label></div>`;
+const num=(id,label,min,max)=>`<div class="field"><label>${esc(label)}</label><input id="${id}" inputmode="numeric" max="${max}" min="${min}" step="1" type="number"/></div>`;
+const sel=(id,label,opts,style)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}"${style?` style="${style}"`:''}>${opts.map((o,i)=>`<option value="${i}">${esc(o)}</option>`).join('')}</select>`;
+const card=(inner,id)=>`<section class="card"${id?` id="${id}"`:''}>${inner}</section>`;
+const lbl=s=>`<div class="detailSectionLabel">${esc(s)}</div>`;
+const btnRow=(...b)=>`<div class="controlgrid">${b.map(([id,txt,primary])=>`<button class="btn${primary?' primary':''}" id="${id}"${b.length===1?' style="grid-column:1/-1"':''}>${esc(txt)}</button>`).join('')}</div>`;
+const stRow=(id,key)=>`<div class="detailRow"><div><div class="detailLeft">${esc(key)}</div></div><span class="detailValue" id="${id}">—</span></div>`;
+function build(){
+  const root=$b('bcBody');if(!root)return;
+  const h=[];
+  h.push(`<div class="softNote" id="bcSupport" hidden></div>`);
+  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
+  h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
+  let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
+  T.btn.forEach((b,bi)=>{m+=`<div class="detailRow"><div><div class="detailLeft">${esc(b)}</div></div></div>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${sel(`bcM${bi}_${gi}`,b+' · '+g,T.act,'max-width:62%')}</div>`).join('')});
+  h.push(lbl(T.mc),card(m));
+  h.push(lbl(T.hb),card(tg('bcHb',T.hb,T.hbD)+`<div class="fieldgrid">${num('bcHc',T.hc,1,10)}</div>`+btnRow(['bcHbSave',T.save,1],['bcHbRun',T.run,0])));
+  h.push(lbl(T.rh),card(tg('bcRh',T.rh,T.rhD)));
+  h.push(lbl(T.rl),card(tg('bcRl',T.rl,T.rlD)+`<div class="listrow"><div><div class="listkey">${esc(T.mode)}</div></div>${sel('bcRlm',T.mode,T.rlm,'max-width:62%')}</div>`));
+  h.push(lbl(T.dh),card(tg('bcDh',T.dh,T.dhD)+`<div class="fieldgrid">${num('bcDd',T.dd,0,10000)}</div>`+btnRow(['bcDhSave',T.save,1])));
+  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
+  h.push(`<div class="softNote" id="bcSaveState" aria-live="polite"></div>`);
+  root.innerHTML=h.join('');
+}
+build();
+const setText=(id,v)=>{const e=$b(id);if(e)e.textContent=v};
+const setChk=(id,v)=>{const e=$b(id);if(e&&!e.dataset.busy)e.checked=!!v};
+const setVal=(id,v)=>{const e=$b(id);if(e&&document.activeElement!==e&&!e.dataset.dirty)e.value=String(v)};
+function render(d){
+  if(!d||!d.cfg)return;bc=d;const c=d.cfg,l=d.live||{},s=d.stats||{};
+  const sup=$b('bcSupport');if(sup){sup.hidden=d.supported&&d.layout!=='EXPERIMENTAL';sup.textContent=d.supported?T.experimental:T.unsupported}
+  $b('bcBody')?.querySelectorAll('input,select,button').forEach(e=>{e.disabled=!d.supported});
+  setChk('bcEe',c.eeEnabled);for(let i=0;i<4;i++)setChk('bcDoor'+i,(c.eeDoorMask>>i)&1);
+  setChk('bcWx',c.eeWeatherBlock);setChk('bcWxs',c.eeWeatherStrict);setVal('bcRd',c.eeRestoreDelayMs);
+  setChk('bcMf',c.eeMirrorFold);setChk('bcCam',c.eeMirrorCamera);setVal('bcUk',c.eeUnfoldKph);setVal('bcUh',c.eeUnfoldHoldS);
+  setChk('bcSb',c.sbEnabled);for(let i=0;i<3;i++)setChk('bcSeat'+i,(c.sbSeatMask>>i)&1);
+  setChk('bcMc',c.mcEnabled);setVal('bcLp',c.mcLongMs);setVal('bcGp',c.mcGapMs);
+  (c.mcAction||[]).forEach((row,bi)=>row.forEach((a,gi)=>setVal(`bcM${bi}_${gi}`,a)));
+  setChk('bcHb',c.hzBlinkEnabled);setVal('bcHc',c.hzBlinkCount);setChk('bcRh',c.rvHazard);
+  setChk('bcRl',c.rvLight);setVal('bcRlm',c.rvLightMode);setChk('bcDh',c.drHazard);setVal('bcDd',c.drOffDelayMs);
+  setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
+  setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
+  setText('bcStWx',l.weather||'—');setText('bcStDoors',l.doors||'—');setText('bcStWin',l.windows||'—');
+  setText('bcStEe',l.easyEntry||'—');setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
+  setText('bcStCam',l.camera||'—');
+  setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
+  setText('bcStCnt',`TX ${s.txOk||0}/${s.txFail||0} · EE ${s.entryOpens||0}/${s.entryRestores||0} · WX ${s.entryBlockedWeather||0} · BELT ${s.seatbeltInjected||0} · MACRO ${s.macroEvents||0}`);
+  const n=[c.eeEnabled,c.sbEnabled,c.mcEnabled,c.hzBlinkEnabled,c.rvHazard,c.rvLight,c.drHazard].filter(Boolean).length;
+  setText('bodyComfortRowState',!d.supported?T.na:n?n+' '+T.on:T.off);
+}
+async function fetchBody(){try{render(await jget('/api/body/config'))}catch(e){}}
+window.fetchBodyComfort=fetchBody;
+async function save(params,el){
+  if(el)el.dataset.busy='1';bcBusy++;setText('bcSaveState',T.saving);
+  try{const d=await featurePostJson('/api/body/update?'+new URLSearchParams(params));if(el)delete el.dataset.busy;render(d);setText('bcSaveState',T.saved);return true}
+  catch(e){if(el){delete el.dataset.busy;if(el.type==='checkbox')el.checked=!el.checked}setText('bcSaveState',T.failed+' · '+(e.message||e));fetchBody();return false}
+  finally{bcBusy--}
+}
+const bindToggle=(id,key)=>{const e=$b(id);if(e)e.onchange=()=>save({[key]:e.checked?1:0},e)};
+[['bcEe','eeEnabled'],['bcWx','eeWeatherBlock'],['bcWxs','eeWeatherStrict'],['bcMf','eeMirrorFold'],['bcCam','eeMirrorCamera'],['bcSb','sbEnabled'],['bcMc','mcEnabled'],['bcHb','hzBlinkEnabled'],['bcRh','rvHazard'],['bcRl','rvLight'],['bcDh','drHazard']].forEach(([id,k])=>bindToggle(id,k));
+const maskOf=(prefix,n)=>{let m=0;for(let i=0;i<n;i++)if($b(prefix+i)?.checked)m|=1<<i;return m};
+for(let i=0;i<4;i++){const e=$b('bcDoor'+i);if(e)e.onchange=()=>save({eeDoorMask:maskOf('bcDoor',4)},e)}
+for(let i=0;i<3;i++){const e=$b('bcSeat'+i);if(e)e.onchange=()=>save({sbSeatMask:maskOf('bcSeat',3)},e)}
+for(let bi=0;bi<6;bi++)for(let gi=0;gi<3;gi++){const e=$b(`bcM${bi}_${gi}`);if(e)e.onchange=()=>save({mc:`${bi},${gi},${e.value}`})}
+const rlm=$b('bcRlm');if(rlm)rlm.onchange=()=>save({rvLightMode:rlm.value});
+$b('bcBody')?.addEventListener('input',e=>{if(e.target.type==='number')e.target.dataset.dirty='1'});
+function readNums(map){const out={};for(const[id,key]of map){const e=$b(id),v=Number(e?.value);if(!e||e.value===''||!Number.isInteger(v)||v<Number(e.min)||v>Number(e.max)){e?.focus();setText('bcSaveState',T.failed+' · '+key);return null}out[key]=v}return out}
+async function saveNums(map){const p=readNums(map);if(!p)return;if(await save(p))map.forEach(([id])=>{const e=$b(id);if(e)delete e.dataset.dirty});}
+const onClick=(id,fn)=>{const e=$b(id);if(e)e.onclick=fn};
+onClick('bcEeSave',()=>saveNums([['bcRd','eeRestoreDelayMs'],['bcUk','eeUnfoldKph'],['bcUh','eeUnfoldHoldS']]));
+onClick('bcMcSave',()=>saveNums([['bcLp','mcLongMs'],['bcGp','mcGapMs']]));
+onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkCount']]));
+onClick('bcDhSave',()=>saveNums([['bcDd','drOffDelayMs']]));
+async function action(id){try{render(await featurePostJson('/api/body/action?id='+id));setText('bcSaveState','')}catch(e){setText('bcSaveState',T.failed+' · '+(e.message||e))}}
+onClick('bcHbRun',()=>action(8));onClick('bcFoldNow',()=>action(9));onClick('bcCamNow',()=>action(10));
+// Wi-Fi timing (Wireless panel).
+function renderWifi(d){if(!d||d.ok===false)return;wt=d;setChk('wifiSlowToggle',d.slowStartEnabled);setChk('wifiHideToggle',d.hideEnabled);setVal('wifiStartDelay',d.startDelayS);setVal('wifiHideDelay',d.hideDelayS);const hd=$b('wifiHideDesc');if(hd)hd.textContent=T.wifiHideD+(d.hiddenNow?' · '+T.on:'')}
+async function fetchWifiTiming(){try{renderWifi(await jget('/api/wifi/timing'))}catch(e){}}
+window.fetchWifiTiming=fetchWifiTiming;
+async function saveWifi(params,el){if(el)el.dataset.busy='1';try{const d=await featurePostJson('/api/wifi/timing?'+new URLSearchParams(params));if(el)delete el.dataset.busy;if('startDelayS'in params)['wifiStartDelay','wifiHideDelay'].forEach(i=>{const e=$b(i);if(e)delete e.dataset.dirty});renderWifi(d)}catch(e){if(el){delete el.dataset.busy;if(el.type==='checkbox')el.checked=!el.checked}fetchWifiTiming()}}
+['wifiStartDelay','wifiHideDelay'].forEach(i=>{const e=$b(i);if(e)e.oninput=()=>{e.dataset.dirty='1'}});
+const ws=$b('wifiSlowToggle');if(ws)ws.onchange=()=>saveWifi({slowStartEnabled:ws.checked?1:0},ws);
+const wh=$b('wifiHideToggle');if(wh)wh.onchange=()=>saveWifi({hideEnabled:wh.checked?1:0},wh);
+onClick('wifiTimingApply',()=>{const a=Number($b('wifiStartDelay')?.value),b=Number($b('wifiHideDelay')?.value);if(!Number.isInteger(a)||a<0||a>600||!Number.isInteger(b)||b<0||b>3600)return;saveWifi({slowStartEnabled:$b('wifiSlowToggle')?.checked?1:0,startDelayS:a,hideEnabled:$b('wifiHideToggle')?.checked?1:0,hideDelayS:b})});
+setTimeout(fetchBody,1500);
 })();</script>
 <script>(()=>{
   const q=id=>document.getElementById(id),sheet=q('selectSheet'),back=q('selectSheetBack'),list=q('selectSheetList');

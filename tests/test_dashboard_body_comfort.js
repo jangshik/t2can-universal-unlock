@@ -1,0 +1,154 @@
+// Browser regression for the Body Comfort panel and Wi-Fi timing card.
+// Runs against dashboard_source.html, the embedded index_html.h bytes and the
+// zh-CN source with a mocked firmware API.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
+const root=path.resolve(__dirname,'..');
+
+function firmware(){
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkCount:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
+  const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkCount:[1,10],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
+  const state={cfg,wifi,supported:true,failNext:0,actions:[]};
+  state.json=()=>({ok:true,supported:state.supported,bus:state.supported?'BODY_CAN_A':'NONE',layout:state.supported?'JUNIPER_VEH':'NONE',taskRunning:true,cfg:JSON.parse(JSON.stringify(cfg)),live:{gear:'P',speedKph:0,weather:'CLEAR',doors:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',windows:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',easyEntry:'FL:IDLE FR:IDLE RL:IDLE RR:IDLE',mirrors:'L:UNFOLDED R:UNFOLDED',mirrorFoldedByFeature:false,camera:'OFF',hazard:'OFF',hazardOwned:false,blinkActive:false,reverseHazard:false,doorHazard:false,rearLight:false},stats:{txOk:4,txFail:0,entryOpens:1,entryRestores:1,entryBlockedWeather:0,seatbeltInjected:0,macroEvents:0}});
+  state.update=params=>{
+    if(!state.supported)return[409,{ok:false,error:'unsupported'}];
+    if(state.failNext>0){state.failNext--;return[500,{ok:false,error:'Settings could not be saved'}]}
+    let any=false;
+    for(const[k,v]of params){
+      if(k==='mc'){const[b,g,a]=v.split(',').map(Number);cfg.mcAction[b][g]=a;any=true;continue}
+      if(typeof cfg[k]==='boolean'){if(!['0','1'].includes(v))return[400,{ok:false,error:'invalid '+k}];cfg[k]=v==='1';any=true;continue}
+      if(k in ranges){const n=Number(v);if(!Number.isInteger(n)||n<ranges[k][0]||n>ranges[k][1])return[400,{ok:false,error:'invalid '+k}];cfg[k]=n;any=true;continue}
+      return[400,{ok:false,error:'unknown '+k}];
+    }
+    return any?[200,state.json()]:[400,{ok:false,error:'no settings'}];
+  };
+  return state;
+}
+
+async function check(html,label,zh=false){
+  const browser=await launchBrowser();
+  try{
+    const page=await browser.newPage({viewport:{width:390,height:844}}),requests=[],fw=firmware();
+    page.on('pageerror',e=>{throw e});
+    await page.route('http://body.test/**',async route=>{
+      const request=route.request(),url=new URL(request.url());
+      requests.push(`${request.method()} ${url.pathname}${url.search}`);
+      if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:html});
+      let status=200,body={};
+      if(url.pathname==='/api/profile/status')body={setupMode:false,profile:2,topology:2,turn:1,nagSupported:true,nagTorqueSupported:false,nagTsl9Supported:true,advancedEapSupported:true,euUnlockSupported:true};
+      else if(url.pathname==='/api/features/status')body={lab:false,s3xy:false,doorCancel:false};
+      else if(url.pathname==='/api/body/config')body=fw.json();
+      else if(url.pathname==='/api/body/update')[status,body]=fw.update([...url.searchParams]);
+      else if(url.pathname==='/api/body/action'){fw.actions.push(url.searchParams.get('id'));body=fw.json()}
+      else if(url.pathname==='/api/wifi/timing'){
+        if(request.method()==='POST'){for(const[k,v]of url.searchParams)fw.wifi[k]=k.endsWith('Enabled')?v==='1':Number(v)}
+        body=fw.wifi;
+      }
+      await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+    });
+    await page.goto('http://body.test/',{waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>universalBootReady);
+    await page.evaluate(()=>showPage('settings'));
+    const row=page.locator('#bodyComfortSettingsRow');
+    assert.equal(await row.count(),1,`${label}: settings row missing`);
+    await page.waitForFunction(()=>document.getElementById('bodyComfortRowState')?.textContent!=='—');
+    assert.match(await page.locator('#bodyComfortRowState').textContent(),zh?/关/:/OFF/);
+    await row.click();
+    await page.waitForFunction(()=>document.getElementById('panelBodyComfort')?.classList.contains('show'));
+    if(zh)assert.equal(await page.locator('#panelBodyComfort .panelHero').textContent(),'车身舒适功能');
+    assert.equal(await page.locator('#panelBodyComfort select[id^="bcM"]').count(),18,'macro selects');
+    assert.equal(await page.locator('#bcRlm option').count(),3);
+    assert.equal(await page.locator('#bcM0_0 option').count(),11,'macro actions');
+    assert.equal(await page.locator('#bcSupport').isHidden(),true,'Juniper layout note hidden');
+    assert.equal(await page.locator('#bcEe').isChecked(),false,'all features start OFF');
+
+    // Toggle Easy Entry.
+    await page.locator('#bcEe').locator('xpath=..').click();
+    await page.waitForFunction(()=>/^1 /.test(document.getElementById('bodyComfortRowState').textContent));
+    assert.equal(await page.locator('#bcEe').isChecked(),true);
+    assert(requests.includes('POST /api/body/update?eeEnabled=1'),requests.join('\n'));
+    assert.match(await page.locator('#bodyComfortRowState').textContent(),zh?/1 开/:/1 ON/);
+    // Door mask: front-right off.
+    await page.locator('#bcDoor1').locator('xpath=..').click();
+    await page.waitForFunction(()=>!document.getElementById('bcDoor1').checked);
+    await page.waitForTimeout(80);
+    assert(requests.includes('POST /api/body/update?eeDoorMask=13'));
+    assert.equal(fw.cfg.eeDoorMask,13);
+    // Macro slot: right scroll long press -> Blink hazards.
+    await page.evaluate(()=>{const s=document.getElementById('bcM1_2');s.value='8';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForTimeout(50);
+    assert(requests.includes('POST /api/body/update?mc=1%2C2%2C8'),requests.join('\n'));
+    assert.equal(fw.cfg.mcAction[1][2],8);
+    // Numeric save with validation.
+    await page.locator('#bcRd').fill('6000');
+    await page.locator('#bcEeSave').click();
+    await page.waitForTimeout(50);
+    assert.equal(requests.some(r=>r.includes('eeRestoreDelayMs=6000')),false,'out-of-range value must not be posted');
+    await page.locator('#bcRd').fill('1500');
+    await page.locator('#bcUk').fill('20');
+    await page.locator('#bcEeSave').click();
+    await page.waitForFunction(()=>document.getElementById('bcSaveState').textContent.length>0&&!document.getElementById('bcRd').dataset.dirty);
+    assert(requests.includes('POST /api/body/update?eeRestoreDelayMs=1500&eeUnfoldKph=20&eeUnfoldHoldS=3'),requests.join('\n'));
+    assert.equal(fw.cfg.eeRestoreDelayMs,1500);
+    // Polling never overwrites a field being edited.
+    await page.locator('#bcDd').fill('4500');
+    await page.waitForTimeout(1300);
+    assert.equal(await page.locator('#bcDd').inputValue(),'4500');
+    await page.locator('#bcDhSave').click();
+    await page.waitForFunction(()=>!document.getElementById('bcDd').dataset.dirty);
+    assert.equal(fw.cfg.drOffDelayMs,4500);
+    // Failed save reverts the toggle.
+    fw.failNext=1;
+    await page.locator('#bcRh').locator('xpath=..').click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#bcRh').isChecked(),false,'failed save must revert');
+    assert.equal(fw.cfg.rvHazard,false);
+    // Rear-light mode and action button.
+    await page.evaluate(()=>{const s=document.getElementById('bcRlm');s.value='0';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForTimeout(50);
+    assert.equal(fw.cfg.rvLightMode,0);
+    await page.locator('#bcFoldNow').click();
+    await page.waitForTimeout(50);
+    assert.deepEqual(fw.actions,['9']);
+    // Layout: no horizontal overflow, controls stay on screen.
+    for(const width of[320,390,430])for(const theme of['light','dark']){
+      await page.setViewportSize({width,height:844});await page.evaluate(t=>window.t2Theme.setMode(t),theme);
+      const fits=await page.locator('#panelBodyComfort').evaluate(p=>p.scrollWidth<=innerWidth&&[...p.querySelectorAll('.toggle,select,button.btn,input')].every(e=>{const r=e.getBoundingClientRect();return r.width===0||(r.left>=-1&&r.right<=innerWidth+1)}));
+      assert.equal(fits,true,`${label} ${width}/${theme} overflow`);
+      const dir=process.env.DASHBOARD_SCREENSHOT_DIR;if(dir){fs.mkdirSync(dir,{recursive:true});await page.screenshot({path:path.join(dir,`${label}-body-comfort-${width}-${theme}.png`),animations:'disabled'});}
+    }
+    // Unsupported topology: controls disabled with an explanation.
+    fw.supported=false;
+    await page.waitForFunction(()=>document.getElementById('bcEe').disabled,null,{timeout:3000});
+    assert.equal(await page.locator('#bcSupport').isVisible(),true);
+    fw.supported=true;
+
+    // Wi-Fi timing in the Wireless panel.
+    await page.evaluate(()=>closePanels('back'));
+    await page.locator('[data-panel="panelWireless"]').click();
+    await page.waitForFunction(()=>document.getElementById('wifiStartDelay').value==='30',null,{timeout:5000});
+    await page.locator('#wifiSlowToggle').locator('xpath=..').click();
+    await page.waitForFunction(()=>document.getElementById('wifiSlowToggle').checked);
+    assert(requests.includes('POST /api/wifi/timing?slowStartEnabled=1'));
+    await page.locator('#wifiStartDelay').fill('45');
+    await page.locator('#wifiHideDelay').fill('120');
+    await page.locator('#wifiHideToggle').evaluate(e=>{e.checked=true});
+    await page.locator('#wifiTimingApply').click();
+    await page.waitForTimeout(100);
+    assert(requests.includes('POST /api/wifi/timing?slowStartEnabled=1&startDelayS=45&hideEnabled=1&hideDelayS=120'),requests.join('\n'));
+    assert.equal(fw.wifi.startDelayS,45);
+    assert.equal(fw.wifi.hideDelayS,120);
+    await page.locator('#wifiStartDelay').fill('700');
+    const before=requests.length;
+    await page.locator('#wifiTimingApply').click();
+    await page.waitForTimeout(100);
+    assert.equal(requests.slice(before).some(r=>r.startsWith('POST /api/wifi/timing')),false,'invalid delay must not be posted');
+    const dir=process.env.DASHBOARD_SCREENSHOT_DIR;if(dir)await page.screenshot({path:path.join(dir,`${label}-wifi-timing.png`),animations:'disabled'});
+  }finally{await browser.close();}
+}
+
+(async()=>{
+  for(const {label,html}of dashboardArtifacts(root))await check(html,label);
+  await check(fs.readFileSync(path.join(root,'zh-CN','dashboard_source_zh-CN.html'),'utf8'),'zh-CN',true);
+})().then(()=>console.log('PASS Body Comfort panel and Wi-Fi timing (source, embedded, zh-CN)'),e=>{console.error(e);process.exitCode=1;});

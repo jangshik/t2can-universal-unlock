@@ -80,6 +80,7 @@
 #include "vehicle_logic.h"
 #include "continuous_ap_runtime.h"
 #include "preheat_runtime.h"
+#include "body_comfort_runtime.h"
 #include "web_api.h"
 #include "can_runtime.h"
 #include "can_usb_logger_task.h"
@@ -212,6 +213,7 @@ void setup() {
   r79CfgLoad();
   s3xyAutoLoadConfig();
   preheatMenuLoad();
+  bodyComfortCfgLoad();
   nvsSchemaFinalize();
   canBusOffPersistenceLoad();
   if (labMenuEnabled) {
@@ -327,6 +329,10 @@ void setup() {
     T2CAN_SERIAL_PRINTF("Web task creation failed: %d\n", retWeb);
     restartT2CanSafely();
   }
+
+  // Body Comfort service (Easy Entry, hazards, macros, ...). Started only on
+  // a supported body-bus topology; every feature inside stays OFF by default.
+  bodyComfortStart();
 
   // S3XY BLE task runs independently on core 0. If Bluetooth Master is OFF it
   // never initializes BLEDevice at all. If ON, the mapper remains lazy with no

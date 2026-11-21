@@ -24,6 +24,7 @@ https://discord.gg/euPbYG8Npc
 **v3.30.3 **
 - Restore TLSSC for Model YL
 - Added Chinese Language variant
+- **add_feats branch:** Body Comfort for HW4 Model Y Juniper — Easy Entry (window drop + restore, rain/snow block, mirror fold/camera/auto-unfold), 2nd-row seat-belt chime off per seat, steering-wheel macros, hazard blink, reverse hazards / rear light, D/R door-open hazards. Wi-Fi AP slow start and hidden SSID. All OFF by default — see [BODY_COMFORT.md](BODY_COMFORT.md).
 
 **v3.30.2 **	
 - Added Model S/X MCU2 HW3 profile (Compatibility with HW2.5) 
