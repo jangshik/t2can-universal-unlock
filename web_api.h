@@ -3577,6 +3577,37 @@ static void httpFactoryReset() {
   restartT2CanSafely();
 }
 
+// Hardware listen-only (the USB CAN logger's persistent PASSIVE mode): both
+// controllers stop transmitting and acknowledging. Saved across reboots.
+static String listenOnlyJson() {
+  String j;
+  JsonWriterArduino jw(j);
+  jw.boolean("ok", true);
+  jw.boolean("listenOnly", canUsbPassive());
+  jw.boolean("transitionHeld", canUsbTxHeld() && !canUsbPassive());
+  jw.finish();
+  return j;
+}
+
+static void httpListenOnlyStatus() {
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", listenOnlyJson());
+}
+
+static void httpListenOnlySet() {
+  bool enabled = false;
+  if (server.args() != 1 || !httpBoolArg("enabled", enabled)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid enabled\"}");
+    return;
+  }
+  if (!canUsbRequestMode(enabled)) {
+    server.send(503, "application/json",
+                "{\"ok\":false,\"error\":\"CAN mode change not confirmed; check Diagnostics\"}");
+    return;
+  }
+  server.send(200, "application/json", listenOnlyJson());
+}
+
 static void httpCanHardReinit() {
   if (canMaintenanceActive()) {
     server.send(409, "application/json", "{\"ok\":false,\"error\":\"CAN stopped for maintenance; reboot required\"}");
@@ -6130,6 +6161,8 @@ static void webTask(void *arg) {
     server.on("/api/system/canb-tx.csv", HTTP_GET, httpCanBTxTraceCsv);
     server.on("/api/system/reset-stats", HTTP_POST, httpResetRuntimeStats);
     server.on("/api/system/reinit-can", HTTP_POST, httpCanHardReinit);
+    server.on("/api/system/listen-only", HTTP_GET, httpListenOnlyStatus);
+    server.on("/api/system/listen-only", HTTP_POST, httpListenOnlySet);
     server.on("/api/system/reset-settings", HTTP_POST, httpResetFirmwareSettings);
     server.on("/api/s3xy/stats", HTTP_GET, httpS3xyStats);
     server.on("/api/s3xy/bluetooth-enable", HTTP_POST, httpS3xyBluetoothEnable);

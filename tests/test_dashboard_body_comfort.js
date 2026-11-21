@@ -6,9 +6,9 @@ const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
 const root=path.resolve(__dirname,'..');
 
 function firmware(){
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
-  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
   const state={cfg,wifi,supported:true,failNext:0,actions:[]};
   state.json=()=>({ok:true,supported:state.supported,bus:state.supported?'BODY_CAN_A':'NONE',layout:state.supported?'JUNIPER_VEH':'NONE',taskRunning:true,cfg:JSON.parse(JSON.stringify(cfg)),live:{gear:'P',speedKph:0,weather:'CLEAR',doors:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',windows:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',easyEntry:'FL:IDLE FR:IDLE RL:IDLE RR:IDLE',mirrors:'L:UNFOLDED R:UNFOLDED',mirrorFoldedByFeature:false,camera:'OFF',hazard:'OFF',hazardOwned:false,blinkActive:false,reverseHazard:false,doorHazard:false,rearLight:false},stats:{txOk:4,txFail:0,entryOpens:1,entryRestores:1,entryBlockedWeather:0,seatbeltInjected:0,macroEvents:0}});
   state.update=params=>{
@@ -40,6 +40,10 @@ async function check(html,label,zh=false){
       else if(url.pathname==='/api/features/status')body={lab:false,s3xy:false,doorCancel:false};
       else if(url.pathname==='/api/body/config')body=fw.json();
       else if(url.pathname==='/api/body/update')[status,body]=fw.update([...url.searchParams]);
+      else if(url.pathname==='/api/system/listen-only'){
+        if(request.method()==='POST'){if(fw.failListen){status=503;body={ok:false,error:'CAN mode change not confirmed'}}else{fw.listenOnly=url.searchParams.get('enabled')==='1';body={ok:true,listenOnly:fw.listenOnly}}}
+        else body={ok:true,listenOnly:!!fw.listenOnly};
+      }
       else if(url.pathname==='/api/body/action'){fw.actions.push(url.searchParams.get('id'));body=fw.json()}
       else if(url.pathname==='/api/wifi/timing'){
         if(request.method()==='POST'){for(const[k,v]of url.searchParams)fw.wifi[k]=k.endsWith('Enabled')?v==='1':Number(v)}
@@ -61,7 +65,8 @@ async function check(html,label,zh=false){
     assert.equal(await page.locator('#panelBodyComfort select[id^="bcM"]').count(),24,'macro selects');
     assert.deepEqual(await page.locator('#panelBodyComfort select[id^="bcM"]').evaluateAll(s=>s.slice(0,6).map(e=>e.id)),['bcM6_0','bcM6_1','bcM6_2','bcM7_0','bcM7_1','bcM7_2'],'voice and camera listed first');
     assert.equal(await page.locator('#bcRlm option').count(),3);
-    assert.equal(await page.locator('#bcM0_0 option').count(),19,'10 Body Comfort + 9 existing-feature actions');
+    assert.equal(await page.locator('#bcM0_0 option').count(),22,'None + 11 Body Comfort + 10 existing-feature actions');
+    assert.equal(await page.locator('#bcHdA').inputValue(),'20','door handle defaults to Open frunk');
     assert.equal(await page.locator('#bcM0_0 option[value="4"]').count(),0,'retired action hidden');
     // Macro groups start collapsed and say "Not set".
     assert.equal(await page.locator('.bcMgBody:not([hidden])').count(),0,'all macro groups collapsed');
@@ -105,6 +110,32 @@ async function check(html,label,zh=false){
     assert.match(await page.locator('#bcMgS7').textContent(),zh?/双击 → 折叠/:/Double → Fold \/ unfold mirrors/);
     assert.match(await page.locator('#bcMgS1').textContent(),zh?/长按 → 双闪闪烁/:/Long → Hazard blink/);
     assert.match(await page.locator('#bcMcLabel').textContent(),zh?/已设置 3 个/:/3 set/);
+    // Kickdown: target select, numeric save with trigger/release validation.
+    await page.evaluate(()=>{const s=document.getElementById('bcKdTgt');s.value='1';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForTimeout(50);
+    assert.equal(fw.cfg.kdTargetRaw,2,'Sport');
+    await page.locator('#bcKd').locator('xpath=..').click();
+    await page.waitForTimeout(80);
+    assert.equal(fw.cfg.kdEnabled,true);
+    await page.locator('#bcKdT').fill('70');
+    await page.locator('#bcKdR').fill('15');
+    await page.locator('#bcKdSave').click();
+    await page.waitForFunction(()=>!document.getElementById('bcKdT').dataset.dirty);
+    assert.equal(fw.cfg.kdTriggerPct,70);assert.equal(fw.cfg.kdReleasePct,15);
+    await page.evaluate(()=>{const s=document.getElementById('bcKdRm');s.value='1';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForTimeout(50);
+    assert.equal(fw.cfg.kdReleaseMode,1);
+    // Door handle macro: passenger added, hold 3 s, action TLSSC.
+    await page.locator('#bcHd1').locator('xpath=..').click();
+    await page.waitForTimeout(80);
+    assert.equal(fw.cfg.dhDoorMask,3);
+    await page.locator('#bcHdS').fill('3');
+    await page.locator('#bcHdSave').click();
+    await page.waitForTimeout(80);
+    assert.equal(fw.cfg.dhHoldS,3);
+    await page.evaluate(()=>{const s=document.getElementById('bcHdA');s.value='15';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForTimeout(50);
+    assert.equal(fw.cfg.dhAction,15);
     // Hazard blink is described in seconds.
     assert.match(await page.locator('#bcHbLabel').textContent(),zh?/持续 3 秒/:/for 3 seconds/);
     // Numeric save with validation.
@@ -151,8 +182,25 @@ async function check(html,label,zh=false){
     assert.equal(await page.locator('#bcSupport').isVisible(),true);
     fw.supported=true;
 
-    // Wi-Fi timing in the Wireless panel.
+    // Listen-only toggle in Settings > System.
     await page.evaluate(()=>closePanels('back'));
+    const loRow=page.locator('#listenOnlyRow');
+    assert.equal(await loRow.count(),1);
+    assert.equal(await page.locator('#listenOnlyToggle').isChecked(),false);
+    await loRow.locator('label.toggle').click();
+    await page.waitForTimeout(150);
+    assert.equal(fw.listenOnly,true);
+    assert.equal(await page.locator('#listenOnlyToggle').isChecked(),true);
+    fw.failListen=true;
+    await loRow.locator('label.toggle').click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#listenOnlyToggle').isChecked(),true,'failed switch reverts the toggle');
+    assert.ok((await page.locator('#listenOnlyState').textContent()).length>0,'failure explained');
+    fw.failListen=false;
+    await loRow.locator('label.toggle').click();
+    await page.waitForTimeout(150);
+    assert.equal(fw.listenOnly,false);
+    // Wi-Fi timing in the Wireless panel.
     await page.locator('[data-panel="panelWireless"]').click();
     await page.waitForFunction(()=>document.getElementById('wifiStartDelay').value==='30',null,{timeout:5000});
     await page.locator('#wifiSlowToggle').locator('xpath=..').click();

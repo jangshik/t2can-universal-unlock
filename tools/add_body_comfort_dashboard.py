@@ -38,20 +38,34 @@ TEXT = {
         "lp": "LONG PRESS (ms)", "gp": "CLICK GAP (ms)",
         "btn": ["Left scroll · press", "Right scroll · press", "Left scroll · tilt left",
                 "Left scroll · tilt right", "Right scroll · tilt left", "Right scroll · tilt right",
-                "Voice button", "Camera button"],
+                "Voice button", "Camera button", "Driver door handle", "Passenger door handle"],
         "ges": ["Double", "Triple", "Long"],
         "act": ["None", "Toggle Easy Entry", "Toggle mirror fold", "Toggle rear belt chime",
                 "", "Toggle reverse hazards", "Toggle reverse light",
                 "Toggle door hazards", "Hazard blink", "Fold / unfold mirrors", "Camera view",
                 "Toggle Nag Killer", "Toggle ISA Suppression", "Toggle Disable Driver Monitoring",
                 "Toggle Auto Blinker", "Toggle TLSSC", "Toggle Door Button Cancel",
-                "Toggle Visual Speed Control", "Toggle Continuous AP", "Toggle Battery Preheating"],
+                "Toggle Visual Speed Control", "Toggle Continuous AP", "Toggle Battery Preheating",
+                "Open frunk", "Toggle Listen-Only", "Toggle Kickdown"],
         "actNew": "Body Comfort", "actOld": "Existing features",
         "notSet": "Not set", "setCount": "{n} set", "collapsedHint": "Tap a button to edit its actions.",
         "hb": "Hazard Blink", "hbT": "Hazard Blink (for {n} seconds)",
         "hbD": "One-shot command: a macro or Blink Now turns the hazards on for the set time, then off. This switch only allows or blocks the command; it never leaves the hazards on. Nothing happens if the hazards are already on.",
         "hc": "DURATION (s)", "run": "Blink Now",
         "stMacro": "Last macro",
+        "kd": "Kickdown",
+        "kdD": "In D, pressing the accelerator to the trigger level switches to a stronger acceleration mode (same mechanism as Pedal Response). It switches back when a release condition below is met. Entering P always returns to the vehicle setting.",
+        "kdT": "TRIGGER (%)", "kdTgt": "Kickdown mode", "kdTgtO": ["Standard", "Sport"],
+        "kdRp": "Release when the pedal drops", "kdRpD": "At or below the release level for 0.5 s.",
+        "kdR": "RELEASE AT OR BELOW (%)", "kdRb": "Release on brake", "kdRbD": "Any brake press switches back at once.",
+        "kdRm": "Switch back to", "kdRmO": ["Comfort (Chill)", "Vehicle setting"],
+        "hd": "Door Handle Macro",
+        "hdD": "Hold an exterior front door handle to run an action. Default action: open the frunk, only in P. A normal short pull does nothing.",
+        "hdDr": "Driver door handle", "hdPs": "Passenger door handle", "hdS": "HOLD (s)", "hdA": "Action",
+        "lo": "Listen-Only Mode",
+        "loD": "CAN hardware only listens: nothing is sent or acknowledged, so every feature that sends CAN frames pauses. Dashboard, Wi-Fi and Bluetooth keep working. Saved across reboots.",
+        "loBusy": "Switching CAN mode…", "loFail": "Mode change not confirmed. Check Diagnostics.",
+        "stKd": "Pedal · brake · kickdown", "stHd": "Door handles",
         "rh": "Reverse Hazards", "rhD": "Hazards on while in R, off again when leaving R.",
         "rl": "Reverse Rear Light", "rlD": "Turn the rear lights on while in R.",
         "rlm": ["Rear fog", "Lights ON", "Rear fog + lights ON"], "mode": "Rear light mode",
@@ -96,18 +110,32 @@ TEXT = {
         "mcD": "双击、三击或长按方向盘按键执行动作，也可切换 Nag Killer、TLSSC 等现有功能：8 个按键 × 3 种手势 = 24 个位置。每次按下时按键的原车功能仍会执行。",
         "lp": "长按 (ms)", "gp": "连击间隔 (ms)",
         "btn": ["左滚轮 · 按下", "右滚轮 · 按下", "左滚轮 · 左拨", "左滚轮 · 右拨", "右滚轮 · 左拨", "右滚轮 · 右拨",
-                "语音按钮", "摄像头按钮"],
+                "语音按钮", "摄像头按钮", "驾驶员车门把手", "乘客车门把手"],
         "ges": ["双击", "三击", "长按"],
         "act": ["无", "切换便捷上车", "切换后视镜折叠", "切换后排安全带提示音", "",
                 "切换倒车双闪", "切换倒车后灯", "切换开门双闪", "双闪闪烁", "折叠 / 展开后视镜", "摄像头画面",
                 "切换 Nag Killer", "切换 ISA 抑制", "切换禁用驾驶员监控", "切换自动转向灯", "切换 TLSSC",
-                "切换车门按钮取消", "切换视觉限速控制", "切换连续 AP", "切换电池预热"],
+                "切换车门按钮取消", "切换视觉限速控制", "切换连续 AP", "切换电池预热",
+                "打开前备箱", "切换仅监听模式", "切换 Kickdown"],
         "actNew": "车身舒适功能", "actOld": "现有功能",
         "notSet": "未设置", "setCount": "已设置 {n} 个", "collapsedHint": "点击按键可编辑其动作。",
         "hb": "双闪闪烁", "hbT": "双闪闪烁（持续 {n} 秒）",
         "hbD": "一次性指令：通过宏或“立即闪烁”开启双闪，持续设定时间后关闭。此开关只允许或阻止该指令，不会让双闪一直亮着。如果双闪已开启则不执行。",
         "hc": "持续时间 (s)", "run": "立即闪烁",
         "stMacro": "最近的宏",
+        "kd": "Kickdown",
+        "kdD": "在 D 挡把加速踏板踩到触发值时，切换到更强的加速模式（与“踏板响应”相同机制）。满足下方恢复条件后切回。进入 P 挡时总是恢复车辆设置。",
+        "kdT": "触发 (%)", "kdTgt": "Kickdown 模式", "kdTgtO": ["标准", "运动"],
+        "kdRp": "踏板回落时恢复", "kdRpD": "不高于恢复值持续 0.5 秒。",
+        "kdR": "恢复阈值 (%)", "kdRb": "踩刹车时恢复", "kdRbD": "踩下刹车立即切回。",
+        "kdRm": "切回到", "kdRmO": ["舒适 (Chill)", "车辆设置"],
+        "hd": "车门把手宏",
+        "hdD": "按住前门外把手执行动作。默认动作：打开前备箱（仅限 P 挡）。正常短拉不会触发。",
+        "hdDr": "驾驶员车门把手", "hdPs": "乘客车门把手", "hdS": "按住 (s)", "hdA": "动作",
+        "lo": "仅监听模式",
+        "loD": "CAN 硬件只接收：不发送也不应答任何帧，所有发送 CAN 帧的功能暂停。仪表板、Wi-Fi 和蓝牙照常工作。重启后保持。",
+        "loBusy": "正在切换 CAN 模式…", "loFail": "模式切换未确认，请查看诊断。",
+        "stKd": "踏板 · 刹车 · Kickdown", "stHd": "车门把手",
         "rh": "倒车双闪", "rhD": "R 挡时开启双闪，离开 R 挡后关闭。",
         "rl": "倒车后灯", "rlD": "R 挡时开启后部灯光。",
         "rlm": ["后雾灯", "灯光开启", "后雾灯 + 灯光开启"], "mode": "后灯模式",
@@ -148,6 +176,12 @@ def panel(t):
             '<div id="bcBody"></div></div></section>\n')
 
 
+def listen_only_row(t):
+    return ('<div class="listrow" id="listenOnlyRow"><div><div class="listkey">' + t["lo"] + '</div>'
+            '<div class="listdesc">' + t["loD"] + '</div><div class="listdesc" id="listenOnlyState" aria-live="polite"></div></div>'
+            '<label class="toggle"><input id="listenOnlyToggle" type="checkbox"/><span class="track"></span></label></div>\n')
+
+
 def wifi_card(t):
     return (f'<div class="detailSectionLabel">{t["wifiLabel"]}</div>\n'
             '<section class="card" id="wifiTimingCard">'
@@ -169,7 +203,7 @@ let bc=null,bcBusy=0,wt=null;
 const tg=(id,key,desc)=>`<div class="settingToggleRow"><div><div class="listkey">${esc(key)}</div>${desc?`<div class="listdesc">${esc(desc)}</div>`:''}</div><label class="toggle"><input id="${id}" type="checkbox"/><span class="track"></span></label></div>`;
 const num=(id,label,min,max)=>`<div class="field"><label>${esc(label)}</label><input id="${id}" inputmode="numeric" max="${max}" min="${min}" step="1" type="number"/></div>`;
 const sel=(id,label,opts,style)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}"${style?` style="${style}"`:''}>${opts.map((o,i)=>`<option value="${i}">${esc(o)}</option>`).join('')}</select>`;
-const NEW_ACTS=[0,1,2,3,5,6,7,8,9,10],OLD_ACTS=[11,12,13,14,15,16,17,18,19];
+const NEW_ACTS=[0,1,2,3,5,6,7,22,8,9,10,20],OLD_ACTS=[11,12,13,14,15,16,17,18,19,21];
 const opt=i=>`<option value="${i}">${esc(T.act[i])}</option>`;
 const macroSel=(id,label)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}" style="max-width:62%">${opt(0)}<optgroup label="${esc(T.actNew)}">${NEW_ACTS.slice(1).map(opt).join('')}</optgroup><optgroup label="${esc(T.actOld)}">${OLD_ACTS.map(opt).join('')}</optgroup></select>`;
 const MG_CSS=`<style>.bcMgHead{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer}.bcMgHead:focus-visible{outline:2px solid var(--field-ink);outline-offset:-2px}.bcMgText{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.bcMgName{font-weight:650;font-size:14px}.bcMgSum{font-size:11.5px;line-height:1.4;opacity:.62;overflow-wrap:anywhere}.bcMg.set .bcMgSum{opacity:1;font-weight:600}.bcMgBadge{flex:0 0 auto;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--field-ink);color:var(--field);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}.bcMgBadge[hidden],.bcMgBody[hidden]{display:none}.bcMgChev{flex:0 0 auto;transition:transform .2s}.bcMgHead[aria-expanded="true"] .bcMgChev{transform:rotate(90deg)}@media (prefers-reduced-motion:reduce){.bcMgChev{transition:none}}</style>`;
@@ -191,7 +225,9 @@ function build(){
   h.push(lbl(T.rh),card(tg('bcRh',T.rh,T.rhD)));
   h.push(lbl(T.rl),card(tg('bcRl',T.rl,T.rlD)+`<div class="listrow"><div><div class="listkey">${esc(T.mode)}</div></div>${sel('bcRlm',T.mode,T.rlm,'max-width:62%')}</div>`));
   h.push(lbl(T.dh),card(tg('bcDh',T.dh,T.dhD)+`<div class="fieldgrid">${num('bcDd',T.dd,0,10000)}</div>`+btnRow(['bcDhSave',T.save,1])));
-  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
+  h.push(lbl(T.kd),card(tg('bcKd',T.kd,T.kdD)+`<div class="listrow"><div><div class="listkey">${esc(T.kdTgt)}</div></div>${sel('bcKdTgt',T.kdTgt,T.kdTgtO,'max-width:62%')}</div>`+`<div class="fieldgrid">${num('bcKdT',T.kdT,10,100)}</div>`+tg('bcKdRp',T.kdRp,T.kdRpD)+`<div class="fieldgrid">${num('bcKdR',T.kdR,0,90)}</div>`+tg('bcKdRb',T.kdRb,T.kdRbD)+`<div class="listrow"><div><div class="listkey">${esc(T.kdRm)}</div></div>${sel('bcKdRm',T.kdRm,T.kdRmO,'max-width:62%')}</div>`+btnRow(['bcKdSave',T.save,1])));
+  h.push(lbl(T.hd),card(tg('bcHd',T.hd,T.hdD)+tg('bcHd0',T.hdDr,'')+tg('bcHd1',T.hdPs,'')+`<div class="fieldgrid">${num('bcHdS',T.hdS,1,10)}</div>`+btnRow(['bcHdSave',T.save,1])+`<div class="listrow"><div><div class="listkey">${esc(T.hdA)}</div></div>${macroSel('bcHdA',T.hdA)}</div>`));
+  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStKd',T.stKd)+stRow('bcStHd',T.stHd)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
   h.push(`<div class="softNote" id="bcSaveState" aria-live="polite"></div>`);
   root.innerHTML=h.join('');
 }
@@ -213,6 +249,10 @@ function render(d){
   const hbT=T.hbT.replace('{n}',c.hzBlinkSeconds);setText('bcHbLabel',hbT);const hbKey=$b('bcHb')?.closest('.settingToggleRow')?.querySelector('.listkey');if(hbKey)hbKey.textContent=hbT;
   setChk('bcHb',c.hzBlinkEnabled);setVal('bcHc',c.hzBlinkSeconds);setChk('bcRh',c.rvHazard);
   setChk('bcRl',c.rvLight);setVal('bcRlm',c.rvLightMode);setChk('bcDh',c.drHazard);setVal('bcDd',c.drOffDelayMs);
+  setChk('bcKd',c.kdEnabled);setVal('bcKdTgt',c.kdTargetRaw===2?1:0);setVal('bcKdT',c.kdTriggerPct);setChk('bcKdRp',c.kdReleaseOnPedal);setVal('bcKdR',c.kdReleasePct);setChk('bcKdRb',c.kdReleaseOnBrake);setVal('bcKdRm',c.kdReleaseMode);
+  setChk('bcHd',c.dhEnabled);setChk('bcHd0',c.dhDoorMask&1);setChk('bcHd1',(c.dhDoorMask>>1)&1);setVal('bcHdS',c.dhHoldS);setVal('bcHdA',c.dhAction);
+  setText('bcStKd',`${l.pedalPct==null?'—':l.pedalPct+' %'} · ${l.brake||'?'} · ${l.kickdown||'—'}`);setText('bcStHd',l.handles||'—');
+  if(typeof l.listenOnly==='boolean')window.__setListenOnly?.(l.listenOnly);
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
   setText('bcStWx',l.weather||'—');setText('bcStDoors',l.doors||'—');setText('bcStWin',l.windows||'—');
@@ -246,7 +286,7 @@ async function save(params,el){
   finally{bcBusy--}
 }
 const bindToggle=(id,key)=>{const e=$b(id);if(e)e.onchange=()=>save({[key]:e.checked?1:0},e)};
-[['bcEe','eeEnabled'],['bcWx','eeWeatherBlock'],['bcWxs','eeWeatherStrict'],['bcMf','eeMirrorFold'],['bcCam','eeMirrorCamera'],['bcSb','sbEnabled'],['bcMc','mcEnabled'],['bcHb','hzBlinkEnabled'],['bcRh','rvHazard'],['bcRl','rvLight'],['bcDh','drHazard']].forEach(([id,k])=>bindToggle(id,k));
+[['bcEe','eeEnabled'],['bcWx','eeWeatherBlock'],['bcWxs','eeWeatherStrict'],['bcMf','eeMirrorFold'],['bcCam','eeMirrorCamera'],['bcSb','sbEnabled'],['bcMc','mcEnabled'],['bcHb','hzBlinkEnabled'],['bcRh','rvHazard'],['bcRl','rvLight'],['bcDh','drHazard'],['bcKd','kdEnabled'],['bcKdRp','kdReleaseOnPedal'],['bcKdRb','kdReleaseOnBrake'],['bcHd','dhEnabled']].forEach(([id,k])=>bindToggle(id,k));
 const maskOf=(prefix,n)=>{let m=0;for(let i=0;i<n;i++)if($b(prefix+i)?.checked)m|=1<<i;return m};
 for(let i=0;i<4;i++){const e=$b('bcDoor'+i);if(e)e.onchange=()=>save({eeDoorMask:maskOf('bcDoor',4)},e)}
 for(let i=0;i<3;i++){const e=$b('bcSeat'+i);if(e)e.onchange=()=>save({sbSeatMask:maskOf('bcSeat',3)},e)}
@@ -260,6 +300,21 @@ onClick('bcEeSave',()=>saveNums([['bcRd','eeRestoreDelayMs'],['bcUk','eeUnfoldKp
 onClick('bcMcSave',()=>saveNums([['bcLp','mcLongMs'],['bcGp','mcGapMs']]));
 onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkSeconds']]));
 onClick('bcDhSave',()=>saveNums([['bcDd','drOffDelayMs']]));
+onClick('bcKdSave',()=>saveNums([['bcKdT','kdTriggerPct'],['bcKdR','kdReleasePct']]));
+onClick('bcHdSave',()=>saveNums([['bcHdS','dhHoldS']]));
+for(let i=0;i<2;i++){const e=$b('bcHd'+i);if(e)e.onchange=()=>save({dhDoorMask:maskOf('bcHd',2)},e)}
+const kdTgt=$b('bcKdTgt');if(kdTgt)kdTgt.onchange=()=>save({kdTargetRaw:kdTgt.value==='1'?2:1});
+const kdRm=$b('bcKdRm');if(kdRm)kdRm.onchange=()=>save({kdReleaseMode:kdRm.value});
+const hdA=$b('bcHdA');if(hdA)hdA.onchange=()=>save({dhAction:hdA.value});
+// Listen-only (Settings > System).
+const lo=$b('listenOnlyToggle');let loBusy=false;
+window.__setListenOnly=v=>{if(lo&&!loBusy)lo.checked=!!v};
+async function fetchListenOnly(){try{const d=await jget('/api/system/listen-only');window.__setListenOnly(d.listenOnly)}catch(e){}}
+if(lo)lo.onchange=async()=>{const want=lo.checked;loBusy=true;lo.disabled=true;setText('listenOnlyState',T.loBusy);
+  try{const d=await featurePostJson('/api/system/listen-only?enabled='+(want?1:0));loBusy=false;window.__setListenOnly(d.listenOnly);setText('listenOnlyState','')}
+  catch(e){loBusy=false;lo.checked=!want;setText('listenOnlyState',T.loFail);fetchListenOnly()}
+  finally{lo.disabled=false}};
+setTimeout(fetchListenOnly,1800);
 async function action(id){try{render(await featurePostJson('/api/body/action?id='+id));setText('bcSaveState','')}catch(e){setText('bcSaveState',T.failed+' · '+(e.message||e))}}
 onClick('bcHbRun',()=>action(8));onClick('bcFoldNow',()=>action(9));onClick('bcCamNow',()=>action(10));
 // Wi-Fi timing (Wireless panel).
@@ -296,6 +351,9 @@ def patch(path: Path, lang: str) -> bool:
     # 2) Wi-Fi timing card after the Wi-Fi password note.
     i = find(lambda l: l.startswith('<div class="softNote" id="wifiPasswordHint">'), "wifi hint")
     lines.insert(i + 1, wifi_card(t).rstrip("\n"))
+    # 2b) Listen-only toggle in the System card, after the Wireless row.
+    i = find(lambda l: l.startswith('<div class="listrow clickable" data-panel="panelWireless">'), "wireless row")
+    lines.insert(i + 1, listen_only_row(t).rstrip("\n"))
     # 3) Panel before the settings detail panels marker.
     i = find(lambda l: l.strip() == "<!-- Settings detail panels -->", "panels marker")
     lines.insert(i, panel(t).rstrip("\n"))

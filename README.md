@@ -60,7 +60,7 @@ https://discord.gg/euPbYG8Npc
  - And a lot more check [Changelog](https://github.com/06066060606060/t2can-universal-unlock/blob/main/CHANGELOG.md)
 
 
-## 🧩 add_feats — 2026-11-21 추가 기능 (Body Comfort + Wi-Fi Timing)
+## 🧩 add_feats — 2026-11-21 추가 기능 (Body Comfort + Wi-Fi Timing + Kickdown + Door Handle + Listen-Only)
 
 > 기준 차량: **HW4 Model Y Juniper · Body + Chassis** (Body CAN = CAN A / MCP2515). Model Y L(Party + VH)은 같은 VEH 프레임이 CAN B(VH)에 있어 동일하게 동작합니다. Party + Chassis, Model S는 미지원입니다. 다른 Body + Chassis 프로필(Highland, Legacy 3/Y)은 프레임 레이아웃이 검증되지 않아 "실험적"으로 표시됩니다.
 >
@@ -89,6 +89,8 @@ https://discord.gg/euPbYG8Npc
 | 0x3C2 | VCLEFT_switchStatus mux1 (bit0=1) | 50\|2 | VCLEFT_swcCameraButtonState | 1 OFF → 2 ON (300 ms 누름) | 1) 접힘 중 카메라, 매크로 |
 | 0x3A1 | VCFRONT_vehicleStatus mux0 (bit0=0) | 36\|2 / 38\|2 / 40\|2 | VCFRONT_2RowLeft / Center / RightUnbuckled | 1 OCCUPIED_AND_UNBUCKLED → 0 NONE (선택한 좌석만) | 2) 2열 벨트 알람 |
 | 0x3A1 | VCFRONT_vehicleStatus | 52\|4, byte 7 | Counter, Checksum | 카운터는 그대로, 체크섬 재계산: `(0xA1 + 0x03 + byte0…byte6) & 0xFF` | 2) |
+| 0x273 | UI_vehicleControl | 5\|1 | UI_frunkRequest | 0 → 1 MOVE (원샷 3프레임, P단에서만) | 9) 도어 핸들 → 프렁크 열기, 매크로 |
+| 0x334 | UI_powertrainControl | 5\|2, 52\|4, byte 7 | UI_pedalMap, Counter, Checksum | → 0 Chill / 1 Standard / 2 Sport. **기존 Pedal Response 경로(`requestPedalMapMode`)가 송신**하며 카운터 +1, 체크섬 재계산 | 8) 킥다운 |
 
 0x3A1은 **순정 프레임의 체크섬이 위 공식과 맞을 때만** 수정합니다. 맞지 않으면 아무것도 보내지 않고 `seatbeltBadChecksum` 카운터만 올립니다. 에어백/RCM이 쓰는 원본 벨트 신호(0x40A, 0x31A)는 건드리지 않습니다.
 
@@ -98,7 +100,10 @@ https://discord.gg/euPbYG8Npc
 |---|---|---|---|---|
 | 0x102 / 0x103 | VCLEFT / VCRIGHT_doorStatus | 14\|4, 18\|4 | front / rearLatchStatus: 1 OPENED, 3 CLOSING, 4 OPENING, 5 AJAR → 열림 / 2 CLOSED → 닫힘 / 그 외 → 알 수 없음 | 문 상태 (0x102 = FL·RL, 0x103 = FR·RR) |
 | 0x102 / 0x103 | 〃 | 52\|3 | mirrorFoldState: 1 FOLDED, 2 UNFOLDED, 3 FOLDING, 4 UNFOLDING | 미러 상태 |
+| 0x102 / 0x103 | 〃 | 10\|1 | VCLEFT / VCRIGHT_frontHandlePulled (외부 앞문 핸들 당김) | 9) 도어 핸들 매크로 (0x102 = 운전석, 0x103 = 조수석) |
 | 0x118 | DI_systemStatus | 21\|3 | DI_gear: 1 P, 2 R, 3 N, 4 D (1.5초 이내 값만 사용) | 기어 |
+| 0x118 | DI_systemStatus | 32\|8 | DI_accelPedalPos = raw × 0.4 % (255 = SNA) | 킥다운 페달 |
+| 0x118 | DI_systemStatus | 19\|2 | DI_brakePedalState: 0 OFF, 1 ON, 2 INVALID | 킥다운 브레이크 해제 |
 | 0x257 | DI_speed | 43\|13 | DI_vehicleSpeed = raw × 0.08 − 40 km/h (8191 = SNA) | 미러 펼침 속도 |
 | 0x25C | APP_environment | 0, 1 | Rainy, Snowy (5초 이내 값만 사용) | 비/눈 차단 |
 | 0x2C2 / 0x2C3 | VCLEFT / VCRIGHT_windowStatus mux0 | 1\|4, 33\|4 / 22\|9, 54\|9 (signed) | 창문 동작 상태(0 STOPPED) / 위치 raw | 정지 판정, 위치 학습 |
@@ -154,6 +159,7 @@ https://discord.gg/euPbYG8Npc
   - **더블 / 트리플**: 누름 → 뗌을 한 번의 클릭으로 세고, 마지막으로 뗀 뒤 클릭 간격(200–800, 기본 400 ms)이 지나면 클릭 수로 판정합니다.
   - **롱**: 누른 채 500–2000 ms(기본 800)가 지나면 그 즉시 실행합니다. 이때 그 전까지 센 클릭은 무효가 됩니다.
   - 0x3C2 mux1이 600 ms 넘게 안 들어오면 판정을 초기화합니다. 처음 볼 때 이미 눌려 있던 버튼은 무시합니다.
+- 동작 20 프렁크 열기(P단만), 21 Listen-Only 토글, 22 킥다운 토글도 고를 수 있습니다.
 - 동작 ID: 0 없음, 1 Easy Entry 토글, 2 미러 접기 옵션 토글, 3 벨트 알람 토글, 5 후진 비상등 토글, 6 후진 후미등 토글, 7 문열림 비상등 토글, 8 비상등 점멸 실행, 9 미러 접기/펴기, 10 카메라. (4 "비상등 점멸 기능 토글"은 헷갈려서 없앴고, 저장돼 있던 값은 "없음"으로 읽습니다.)
 - **기존 기능 토글(동작 11–19)**: 11 Nag Killer, 12 ISA Suppression, 13 Disable Driver Monitoring, 14 Auto Blinker, 15 TLSSC, 16 Door Button Cancel, 17 Visual Speed Control, 18 Continuous AP, 19 Battery Preheating.
   - 대시보드에서 해당 기능을 켜고 끌 때와 **같은 내부 함수**로 바꾸고 저장합니다. Nag Killer는 대시보드와 똑같이 TSL9 입력 정리 → CAN TX 일시 보류 → 저장 → 해제 순서로 처리합니다.
@@ -176,6 +182,33 @@ https://discord.gg/euPbYG8Npc
 
 **7) D·R에서 문 열림 시 비상깜빡이** — D 또는 R에서 문이 하나라도 열리면 켜고, 모든 문이 닫힌 뒤 지연(0–10000, 기본 2000 ms)이 지나면 끕니다. 중간에 P로 바꿔도 문이 다 닫힐 때까지 유지합니다.
 
+**8) 킥다운 (Kickdown)**
+- 동작 조건: 신선한 기어가 **D**, 가속 페달이 트리거(10–100 %, 기본 90 %) 이상으로 **0.1초** 유지, 브레이크는 밟지 않은 상태.
+- 조건이 맞으면 가속 모드를 **Standard(1)** 또는 **Sport(2)**로 바꿉니다(선택).
+  - 기존 Pedal Response 기능의 `requestPedalMapMode()`를 그대로 씁니다. 그래서 AP/NOA 중, Summon 중, 0x334 순정 프레임이 1.5초 넘게 없을 때는 기존과 똑같이 막힙니다.
+- 해제 조건(하나 이상 선택, 둘 다 끄면 저장을 거부합니다):
+  - **페달 하강**: 해제값(0–90 %, 기본 20 %) 이하가 0.5초 이어지면. 해제값은 트리거보다 5 % 이상 낮아야 합니다.
+  - **브레이크**: `DI_brakePedalState = ON`이 되면 즉시.
+  - D를 벗어나거나 기능을 끄면 항상 해제합니다.
+- 해제 후 모드: **Comfort(Chill, 0)**(기본) 또는 **차량 설정**(stock, 운전자가 고른 모드로 복귀).
+- 모드 요청이 거부되면 0.3초 뒤 다시 시도합니다. D가 아닐 때 해제가 거부된 경우에는 재시도하지 않습니다(P에 들어가면 기존 기능이 원래 모드로 돌려놓기 때문).
+- 수동으로 Pedal Response에서 고른 모드가 있어도 킥다운 해제 시 위 설정 모드로 바뀝니다.
+
+**9) 도어 핸들 매크로**
+- 운전석(0x102)·조수석(0x103) **외부 앞문 핸들**을 각각 켜고 끌 수 있고, 둘 다 선택할 수 있습니다.
+- 핸들을 설정 시간(1–10초, 기본 2초) 이상 당기고 있으면 동작을 **한 번** 실행합니다. 핸들을 놓아야 다음 실행이 가능하고, 문을 여는 보통의 짧은 당김은 무시합니다.
+- 동작은 매크로 목록에서 고를 수 있고, 기본값은 **프렁크 열기(동작 20)**입니다.
+- 프렁크 열기는 0x273 `UI_frunkRequest = 1`을 3프레임 보내며, **신선한 기어가 P이고 속도가 2 km/h 이하**일 때만 동작합니다. 그 외에는 거부하고 이유를 "Last macro"에 표시합니다.
+- 실시간 상태에는 핸들 당김이 "DRIVER:PULLED"처럼 표시되고, 매크로 기록에는 버튼 8(운전석 핸들)·9(조수석 핸들)로 남습니다.
+
+**10) Listen-Only 모드**
+- Settings → System → **Listen-Only Mode** 토글로 켭니다. 기존 USB CAN 로거의 하드웨어 listen-only(PASSIVE)를 그대로 씁니다.
+  - TWAI는 LISTEN_ONLY로, MCP2515는 listen 모드로 다시 초기화되어 **프레임 송신과 ACK를 모두 하지 않습니다.**
+  - 설정은 NVS `usblog/passive`에 저장되어 재부팅 후에도 유지됩니다.
+- 켜져 있는 동안에는 CAN 송신을 하는 모든 기능(Nag Killer, R79, Body Comfort 등)이 멈춥니다. 대시보드, Wi-Fi, BLE는 계속 동작합니다.
+- Body Comfort는 listen-only에서도 **수신은 계속** 합니다. 그래서 핸들 버튼 매크로 "Toggle Listen-Only"(동작 21)로 차 안에서 다시 끌 수 있고, 송신은 하지 않습니다.
+- API: `GET /api/system/listen-only`, `POST /api/system/listen-only?enabled=0|1`(전환 완료까지 최대 약 5초).
+
 **비상등 소유권 규칙 (4·5·7 공통)**
 - 실제 상태(0x3F5)와 요청이 다를 때만 버튼을 누르고, 1.2초 뒤 결과를 확인합니다. 요청 하나당 최대 3번까지 시도합니다.
 - 이 기능이 켠 비상등만 끄고, 운전자가 켠 비상등은 건드리지 않습니다.
@@ -185,11 +218,11 @@ https://discord.gg/euPbYG8Npc
 ### API / 저장
 
 - `GET /api/body/config` — 설정(`cfg`), 실시간 상태(`live`), 카운터(`stats`).
-- `POST /api/body/update` — 키: `eeEnabled, eeDoorMask, eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs, eeMirrorFold, eeMirrorCamera, eeUnfoldKph, eeUnfoldHoldS, sbEnabled, sbSeatMask, mcEnabled, mcLongMs, mcGapMs, mc=<버튼>,<제스처>,<동작>, hzBlinkEnabled, hzBlinkSeconds, rvHazard, rvLight, rvLightMode, drHazard, drOffDelayMs`.
+- `POST /api/body/update` — 키: `eeEnabled, eeDoorMask, eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs, eeMirrorFold, eeMirrorCamera, eeUnfoldKph, eeUnfoldHoldS, sbEnabled, sbSeatMask, mcEnabled, mcLongMs, mcGapMs, mc=<버튼>,<제스처>,<동작>, hzBlinkEnabled, hzBlinkSeconds, rvHazard, rvLight, rvLightMode, drHazard, drOffDelayMs, kdEnabled, kdTriggerPct(10-100), kdTargetRaw(1-2), kdReleaseOnPedal, kdReleasePct(0-90), kdReleaseOnBrake, kdReleaseMode(0 Comfort/1 stock), dhEnabled, dhDoorMask(bit0 운전석, bit1 조수석), dhHoldS(1-10), dhAction`.
   - 범위를 벗어나면 400, 미지원 토폴로지는 409를 돌려줍니다.
-- `POST /api/body/action?id=…` — 동작 즉시 실행: 8 비상등 점멸, 9 미러 접기/펴기, 10 카메라, 11–19 기존 기능 토글(id 4는 거부).
+- `POST /api/body/action?id=…` — 동작 즉시 실행: 8 비상등 점멸, 9 미러 접기/펴기, 10 카메라, 11–19 기존 기능 토글, 20 프렁크 열기, 21 Listen-Only 토글, 22 킥다운 토글(id 4는 거부).
 - `GET|POST /api/wifi/timing` — 키: `slowStartEnabled, startDelayS, hideEnabled, hideDelayS`.
-- 설정은 NVS `bodycmf/cfg`에 저장합니다(42바이트, 버전 2 + 체크섬). 버튼 6개였던 이전 36바이트(버전 1) 설정도 그대로 읽어 매크로를 유지합니다. 손상되면 기본값(전부 OFF)으로 돌아가고, Reset Feature Settings로도 지워집니다.
+- 설정은 NVS `bodycmf/cfg`에 저장합니다(50바이트, 버전 3 + 체크섬). 이전 36바이트(v1)·42바이트(v2) 설정도 그대로 읽어 매크로를 유지하고, 새 항목(킥다운·도어 핸들)은 기본값(OFF)으로 시작합니다. 손상되면 기본값(전부 OFF)으로 돌아가고, Reset Feature Settings로도 지워집니다.
 
 ### 추가·변경된 파일
 

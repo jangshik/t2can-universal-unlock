@@ -113,6 +113,7 @@ struct BcDoorFramePure {
   uint8_t frontState;
   uint8_t rearState;
   uint8_t mirrorFold;  // 0 UNKNOWN 1 FOLDED 2 UNFOLDED 3 FOLDING 4 UNFOLDING
+  bool frontHandlePulled;  // VCLEFT/VCRIGHT_frontHandlePulled (10|1), exterior handle
 };
 
 // Identical bit positions on 0x102 (left side) and 0x103 (right side).
@@ -123,6 +124,7 @@ static inline bool bcDecodeDoorFramePure(const uint8_t *d, uint8_t dlc,
   out.frontState = bcDoorStateFromLatchPure((uint8_t)bcGetBitsPure(d, 14, 4));
   out.rearState = bcDoorStateFromLatchPure((uint8_t)bcGetBitsPure(d, 18, 4));
   out.mirrorFold = (uint8_t)bcGetBitsPure(d, 52, 3);
+  out.frontHandlePulled = bcGetBitsPure(d, 10, 1) != 0u;
   return true;
 }
 
@@ -270,6 +272,26 @@ static inline bool bcComposeWindowRequestPure(uint8_t *d, uint8_t doorMask,
 // ─── Gear / speed / weather / UI / lighting ─────────────────────────────
 enum BcGearPure : uint8_t { BC_GEAR_INVALID = 0, BC_GEAR_P = 1, BC_GEAR_R = 2, BC_GEAR_N = 3, BC_GEAR_D = 4 };
 
+// DI_accelPedalPos (32|8, 0.4 %, 255 = SNA) in 0.1 %, DI_brakePedalState (19|2:
+// 0 OFF, 1 ON, 2 INVALID). Both live in DI_systemStatus 0x118 next to DI_gear.
+static inline bool bcDecodeAccelPedalPure(const uint8_t *d, uint8_t dlc, uint16_t &pct10) {
+  pct10 = 0;
+  if (d == nullptr || dlc < 5u) return false;
+  const uint32_t raw = bcGetBitsPure(d, 32, 8);
+  if (raw == 255u) return false;
+  pct10 = (uint16_t)(raw * 4u);
+  return true;
+}
+
+static inline bool bcDecodeBrakePure(const uint8_t *d, uint8_t dlc, bool &pressed) {
+  pressed = false;
+  if (d == nullptr || dlc < 3u) return false;
+  const uint32_t raw = bcGetBitsPure(d, 19, 2);
+  if (raw > 1u) return false;
+  pressed = raw == 1u;
+  return true;
+}
+
 static inline uint8_t bcDecodeGearPure(const uint8_t *d, uint8_t dlc) {
   if (d == nullptr || dlc < 3u) return BC_GEAR_INVALID;
   const uint8_t g = (uint8_t)bcGetBitsPure(d, 21, 3);
@@ -377,6 +399,11 @@ static constexpr uint8_t BC_MIRROR_FOLDING = 3u;
 
 static inline void bcSetMirrorFoldRequestPure(uint8_t *d, uint8_t request) {
   bcSetBitsPure(d, 24, 2, request & 0x03u);
+}
+
+// UI_frunkRequest (5|1): 1 = MOVE (open). One-shot, like the touchscreen button.
+static inline void bcSetFrunkRequestPure(uint8_t *d) {
+  bcSetBitsPure(d, 5, 1, 1u);
 }
 
 static inline void bcSetRearFogPure(uint8_t *d, bool on) {
@@ -615,11 +642,17 @@ enum BcActionPure : uint8_t {
   BC_ACTION_TOGGLE_VISION_CONTROL,
   BC_ACTION_TOGGLE_CONTINUOUS_AP,
   BC_ACTION_TOGGLE_BATTERY_PREHEAT,
+  BC_ACTION_OPEN_FRUNK,           // 20: P only
+  BC_ACTION_TOGGLE_LISTEN_ONLY,   // 21: hardware listen-only (existing USB-logger mode)
+  BC_ACTION_TOGGLE_KICKDOWN,      // 22
   BC_ACTION_COUNT
 };
 
+// Actions run outside the Body Comfort lock (they persist NVS, take the CAN TX
+// barrier or wait for the CAN supervisor).
 static inline bool bcActionIsExistingFeaturePure(uint8_t action) {
-  return action >= BC_ACTION_TOGGLE_NAG_KILLER && action < BC_ACTION_COUNT;
+  return (action >= BC_ACTION_TOGGLE_NAG_KILLER && action <= BC_ACTION_TOGGLE_BATTERY_PREHEAT) ||
+         action == BC_ACTION_TOGGLE_LISTEN_ONLY;
 }
 
 enum BcRearLightModePure : uint8_t {
@@ -658,7 +691,25 @@ struct BodyComfortConfigPure {
   // 7) D/R door-open hazards
   bool drHazard;
   uint16_t drOffDelayMs;
+  // 8) Kickdown: pedal >= trigger switches UI_pedalMap to the target mode
+  bool kdEnabled;
+  uint8_t kdTriggerPct;     // 10..100
+  uint8_t kdTargetRaw;      // 1 Standard, 2 Sport / Performance
+  bool kdReleaseOnPedal;
+  uint8_t kdReleasePct;     // 0..90, always below the trigger
+  bool kdReleaseOnBrake;
+  uint8_t kdReleaseMode;    // 0 Comfort (Chill), 1 vehicle setting (stock)
+  // 9) Door-handle macro: hold the exterior handle to run an action
+  bool dhEnabled;
+  uint8_t dhDoorMask;       // bit0 driver (front left), bit1 passenger (front right)
+  uint8_t dhHoldS;          // 1..10
+  uint8_t dhAction;         // BcActionPure, default Open frunk
 };
+
+static constexpr uint8_t BC_KD_TARGET_STANDARD = 1u;
+static constexpr uint8_t BC_KD_TARGET_SPORT = 2u;
+static constexpr uint8_t BC_KD_RELEASE_COMFORT = 0u;
+static constexpr uint8_t BC_KD_RELEASE_STOCK = 1u;
 
 static inline BodyComfortConfigPure bodyComfortDefaultsPure() {
   BodyComfortConfigPure c = {};
@@ -674,6 +725,15 @@ static inline BodyComfortConfigPure bodyComfortDefaultsPure() {
   c.hzBlinkSeconds = 3u;
   c.rvLightMode = BC_REAR_LIGHT_BOTH;
   c.drOffDelayMs = 2000u;
+  c.kdTriggerPct = 90u;
+  c.kdTargetRaw = BC_KD_TARGET_STANDARD;
+  c.kdReleaseOnPedal = true;
+  c.kdReleasePct = 20u;
+  c.kdReleaseOnBrake = true;
+  c.kdReleaseMode = BC_KD_RELEASE_COMFORT;
+  c.dhDoorMask = 0x01u;
+  c.dhHoldS = 2u;
+  c.dhAction = BC_ACTION_OPEN_FRUNK;
   return c;
 }
 
@@ -695,13 +755,27 @@ static inline void bodyComfortSanitizePure(BodyComfortConfigPure &c) {
   c.hzBlinkSeconds = bcClampPure<uint8_t>(c.hzBlinkSeconds, 1u, 30u);
   if (c.rvLightMode > BC_REAR_LIGHT_BOTH) c.rvLightMode = BC_REAR_LIGHT_BOTH;
   c.drOffDelayMs = bcClampPure<uint16_t>(c.drOffDelayMs, 0u, 10000u);
+  c.kdTriggerPct = bcClampPure<uint8_t>(c.kdTriggerPct, 10u, 100u);
+  if (c.kdTargetRaw != BC_KD_TARGET_STANDARD && c.kdTargetRaw != BC_KD_TARGET_SPORT)
+    c.kdTargetRaw = BC_KD_TARGET_STANDARD;
+  c.kdReleasePct = bcClampPure<uint8_t>(c.kdReleasePct, 0u, 90u);
+  if (c.kdReleasePct + 5u > c.kdTriggerPct) c.kdReleasePct = (uint8_t)(c.kdTriggerPct - 5u);
+  if (!c.kdReleaseOnPedal && !c.kdReleaseOnBrake) c.kdReleaseOnPedal = true;  // always a way back
+  if (c.kdReleaseMode > BC_KD_RELEASE_STOCK) c.kdReleaseMode = BC_KD_RELEASE_COMFORT;
+  c.dhDoorMask &= 0x03u;
+  c.dhHoldS = bcClampPure<uint8_t>(c.dhHoldS, 1u, 10u);
+  if (c.dhAction >= BC_ACTION_COUNT || c.dhAction == BC_ACTION_RETIRED_4) c.dhAction = BC_ACTION_NONE;
 }
 
 // v1: 36 bytes, six wheel controls. v2: 42 bytes, adds voice + camera buttons.
-static constexpr uint8_t BC_CFG_BLOB_VERSION = 2u;
+// v3: 50 bytes, adds kickdown and the door-handle macro after the macro table.
+static constexpr uint8_t BC_CFG_BLOB_VERSION = 3u;
 static constexpr uint8_t BC_CFG_BLOB_LEN_V1 = 17u + BC_BTN_COUNT_V1 * BC_GESTURE_COUNT + 1u;
-static constexpr uint8_t BC_CFG_BLOB_LEN = 17u + (uint8_t)BC_BTN_COUNT * (uint8_t)BC_GESTURE_COUNT + 1u;
-static_assert(BC_CFG_BLOB_LEN_V1 == 36u && BC_CFG_BLOB_LEN == 42u, "config blob layout");
+static constexpr uint8_t BC_CFG_BLOB_LEN_V2 = 17u + (uint8_t)BC_BTN_COUNT * (uint8_t)BC_GESTURE_COUNT + 1u;
+static constexpr uint8_t BC_CFG_BLOB_V3_EXTRA = 8u;
+static constexpr uint8_t BC_CFG_BLOB_LEN = BC_CFG_BLOB_LEN_V2 + BC_CFG_BLOB_V3_EXTRA;
+static_assert(BC_CFG_BLOB_LEN_V1 == 36u && BC_CFG_BLOB_LEN_V2 == 42u && BC_CFG_BLOB_LEN == 50u,
+              "config blob layout");
 
 static inline uint8_t bcCfgBlobChecksumLenPure(const uint8_t *b, uint8_t len) {
   uint8_t sum = 0xA5u;
@@ -740,6 +814,15 @@ static inline void bodyComfortSerializePure(const BodyComfortConfigPure &c,
   uint8_t i = 17u;
   for (uint8_t b = 0; b < BC_BTN_COUNT; ++b)
     for (uint8_t g = 0; g < BC_GESTURE_COUNT; ++g) out[i++] = c.mcAction[b][g];
+  out[i++] = (uint8_t)((c.kdEnabled ? 0x01u : 0u) | (c.kdReleaseOnPedal ? 0x02u : 0u) |
+                       (c.kdReleaseOnBrake ? 0x04u : 0u) | (c.dhEnabled ? 0x08u : 0u));
+  out[i++] = c.kdTriggerPct;
+  out[i++] = c.kdTargetRaw;
+  out[i++] = c.kdReleasePct;
+  out[i++] = c.kdReleaseMode;
+  out[i++] = c.dhDoorMask;
+  out[i++] = c.dhHoldS;
+  out[i++] = c.dhAction;
   out[BC_CFG_BLOB_LEN - 1u] = bcCfgBlobChecksumPure(out);
 }
 
@@ -748,7 +831,9 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
   c = bodyComfortDefaultsPure();
   if (in == nullptr) return false;
   uint8_t buttons = 0;
-  if (len == BC_CFG_BLOB_LEN && in[0] == BC_CFG_BLOB_VERSION) buttons = BC_BTN_COUNT;
+  bool hasV3 = false;
+  if (len == BC_CFG_BLOB_LEN && in[0] == BC_CFG_BLOB_VERSION) { buttons = BC_BTN_COUNT; hasV3 = true; }
+  else if (len == BC_CFG_BLOB_LEN_V2 && in[0] == 2u) buttons = BC_BTN_COUNT;      // migrate v2
   else if (len == BC_CFG_BLOB_LEN_V1 && in[0] == 1u) buttons = BC_BTN_COUNT_V1;  // migrate v1
   if (buttons == 0u || bcCfgBlobChecksumLenPure(in, (uint8_t)len) != in[len - 1u]) return false;
   c.eeEnabled = (in[1] & 0x01u) != 0u;
@@ -775,6 +860,19 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
   uint8_t i = 17u;
   for (uint8_t b = 0; b < buttons; ++b)
     for (uint8_t g = 0; g < BC_GESTURE_COUNT; ++g) c.mcAction[b][g] = in[i++];
+  if (hasV3) {
+    c.kdEnabled = (in[i] & 0x01u) != 0u;
+    c.kdReleaseOnPedal = (in[i] & 0x02u) != 0u;
+    c.kdReleaseOnBrake = (in[i] & 0x04u) != 0u;
+    c.dhEnabled = (in[i] & 0x08u) != 0u;
+    c.kdTriggerPct = in[i + 1u];
+    c.kdTargetRaw = in[i + 2u];
+    c.kdReleasePct = in[i + 3u];
+    c.kdReleaseMode = in[i + 4u];
+    c.dhDoorMask = in[i + 5u];
+    c.dhHoldS = in[i + 6u];
+    c.dhAction = in[i + 7u];
+  }
   bodyComfortSanitizePure(c);
   return true;
 }
@@ -788,8 +886,85 @@ static inline bool bodyComfortApplyToggleActionPure(BodyComfortConfigPure &c, ui
     case BC_ACTION_TOGGLE_REVERSE_HAZARD: c.rvHazard = !c.rvHazard; return true;
     case BC_ACTION_TOGGLE_REVERSE_LIGHT: c.rvLight = !c.rvLight; return true;
     case BC_ACTION_TOGGLE_DOOR_HAZARD: c.drHazard = !c.drHazard; return true;
+    case BC_ACTION_TOGGLE_KICKDOWN: c.kdEnabled = !c.kdEnabled; return true;
     default: return false;
   }
+}
+
+// ─── Kickdown ────────────────────────────────────────────────────────────
+// Engage: D, fresh pedal at/above the trigger for BC_KD_ENGAGE_MS, brake off.
+// Release (any enabled condition): brake pressed, pedal at/below the release
+// level for BC_KD_RELEASE_MS, leaving D, or the feature switched off.
+static constexpr uint32_t BC_KD_ENGAGE_MS = 100u;
+static constexpr uint32_t BC_KD_RELEASE_MS = 500u;
+static constexpr uint32_t BC_KD_RETRY_MS = 300u;
+
+enum BcKickdownActionPure : uint8_t {
+  BC_KD_ACTION_NONE = 0,
+  BC_KD_ACTION_ENGAGE,
+  BC_KD_ACTION_RELEASE,
+};
+
+struct BcKickdownPure {
+  bool kicked;
+  bool aboveTiming;
+  uint32_t aboveSinceMs;
+  bool belowTiming;
+  uint32_t belowSinceMs;
+  uint32_t retryAfterMs;
+  bool retryPending;
+};
+
+struct BcKickdownInputPure {
+  bool enabled;
+  bool gearD;
+  bool pedalValid;
+  uint16_t pedalPct10;
+  bool brakeValid;
+  bool brakeOn;
+};
+
+static inline uint8_t bcKickdownStepPure(BcKickdownPure &k, uint32_t now,
+                                         const BcKickdownInputPure &in,
+                                         const BodyComfortConfigPure &c) {
+  if (k.retryPending && (int32_t)(now - k.retryAfterMs) < 0) return BC_KD_ACTION_NONE;
+  k.retryPending = false;
+  if (k.kicked) {
+    bool release = !in.enabled || !in.gearD;
+    if (!release && c.kdReleaseOnBrake && in.brakeValid && in.brakeOn) release = true;
+    if (!release && c.kdReleaseOnPedal && in.pedalValid &&
+        in.pedalPct10 <= (uint16_t)c.kdReleasePct * 10u) {
+      if (!k.belowTiming) { k.belowTiming = true; k.belowSinceMs = now; }
+      if ((uint32_t)(now - k.belowSinceMs) >= BC_KD_RELEASE_MS) release = true;
+    } else {
+      k.belowTiming = false;
+    }
+    if (!release) return BC_KD_ACTION_NONE;
+    k.kicked = false;
+    k.belowTiming = false;
+    k.aboveTiming = false;
+    return BC_KD_ACTION_RELEASE;
+  }
+  const bool above = in.enabled && in.gearD && in.pedalValid &&
+                     in.pedalPct10 >= (uint16_t)c.kdTriggerPct * 10u &&
+                     !(in.brakeValid && in.brakeOn);
+  if (!above) { k.aboveTiming = false; return BC_KD_ACTION_NONE; }
+  if (!k.aboveTiming) { k.aboveTiming = true; k.aboveSinceMs = now; }
+  if ((uint32_t)(now - k.aboveSinceMs) < BC_KD_ENGAGE_MS) return BC_KD_ACTION_NONE;
+  k.kicked = true;
+  k.aboveTiming = false;
+  k.belowTiming = false;
+  return BC_KD_ACTION_ENGAGE;
+}
+
+// The pedal-map request was refused: undo the transition and retry later. A
+// release outside D is not retried: entering P already resets the pedal map.
+static inline void bcKickdownRequestFailedPure(BcKickdownPure &k, uint32_t now, uint8_t action,
+                                               bool gearD) {
+  if (action == BC_KD_ACTION_ENGAGE) k.kicked = false;
+  else if (action == BC_KD_ACTION_RELEASE) k.kicked = gearD;
+  k.retryPending = true;
+  k.retryAfterMs = now + BC_KD_RETRY_MS;
 }
 
 // ─── Wi-Fi access-point timing ───────────────────────────────────────────

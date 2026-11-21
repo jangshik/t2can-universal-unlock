@@ -108,6 +108,22 @@ struct BcStateRuntime {
   uint32_t winM1Ms[2]; bool winM1Valid[2];
   bool winSwitch[BC_DOOR_COUNT]; uint32_t switchM0Ms; bool switchM0Valid;
   bool hazardPhysical;
+  uint16_t pedalPct10; uint32_t pedalMs; bool pedalValid;
+  bool brakeOn; uint32_t brakeMs; bool brakeValid;
+  bool handlePulled[2];             // 0 driver (0x102), 1 passenger (0x103)
+
+  // Kickdown.
+  BcKickdownPure kickdown;
+  uint32_t kickdownEngages, kickdownReleases, kickdownRefused;
+
+  // Door-handle macro.
+  bool handleTiming[2];
+  uint32_t handleSinceMs[2];
+  bool handleFired[2];
+
+  // Frunk.
+  BcOneShotRuntime frunkCmd;
+  uint32_t frunkOpens, frunkRefused;
 
   // Easy Entry.
   BcEntryDoorRuntime entry[BC_DOOR_COUNT];
@@ -208,6 +224,8 @@ static void bodyComfortCfgLoad() {
 // ─── TX ──────────────────────────────────────────────────────────────────
 static bool bodyComfortTransmit(uint8_t bus, uint16_t id, const uint8_t *data, uint8_t dlc) {
   if (data == nullptr || dlc > 8u) return false;
+  // Listen-only: observation continues (macros can switch it back), TX never.
+  if (canUsbTxHeld()) return false;
   const uint32_t epoch = canTxEpochSnapshot();
   bool ok = false;
   if (bus == BC_BUS_A) {
@@ -240,6 +258,7 @@ static void bodyComfortObserveDoor(uint8_t side, const uint8_t *d, uint8_t dlc, 
   bcState.door[side == 0u ? BC_DOOR_FL : BC_DOOR_FR] = f.frontState;
   bcState.door[side == 0u ? BC_DOOR_RL : BC_DOOR_RR] = f.rearState;
   bcState.mirrorFold[side] = f.mirrorFold;
+  bcState.handlePulled[side] = f.frontHandlePulled;
   bcState.doorMs[side] = now;
   bcState.doorValid[side] = true;
   portEXIT_CRITICAL(&bcMux);
@@ -324,6 +343,12 @@ static void bodyComfortObserveVehicleControl(uint8_t bus, const uint8_t *d, uint
     m.framesLeft--;
     send = true;
   }
+  BcOneShotRuntime &fr = bcState.frunkCmd;
+  if (fr.active && fr.framesLeft > 0u && (uint32_t)(now - fr.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) {
+    bcSetFrunkRequestPure(out);
+    fr.framesLeft--;
+    send = true;
+  }
   if (bcState.rearLightActive && bcCfg.rvLightMode != BC_REAR_LIGHT_LIGHTS_ON &&
       bcGetBitsPure(d, 23, 1) == 0u) {
     bcSetRearFogPure(out, true);
@@ -399,9 +424,14 @@ static void bodyComfortObserve(uint8_t bus, uint16_t id, const uint8_t *d, uint8
     case BC_ID_VCRIGHT_WINDOW: bodyComfortObserveWindow(1u, d, dlc, now); break;
     case BC_ID_DI_SYSTEM: {
       const uint8_t gear = bcDecodeGearPure(d, dlc);
-      if (gear == BC_GEAR_INVALID) break;
+      uint16_t pedal = 0;
+      bool brake = false;
+      const bool pedalOk = bcDecodeAccelPedalPure(d, dlc, pedal);
+      const bool brakeOk = bcDecodeBrakePure(d, dlc, brake);
       portENTER_CRITICAL(&bcMux);
-      bcState.gear = gear; bcState.gearMs = now; bcState.gearValid = true;
+      if (gear != BC_GEAR_INVALID) { bcState.gear = gear; bcState.gearMs = now; bcState.gearValid = true; }
+      if (pedalOk) { bcState.pedalPct10 = pedal; bcState.pedalMs = now; bcState.pedalValid = true; }
+      if (brakeOk) { bcState.brakeOn = brake; bcState.brakeMs = now; bcState.brakeValid = true; }
       portEXIT_CRITICAL(&bcMux);
       break;
     }
@@ -589,6 +619,9 @@ static const char *bodyComfortToggleExistingFeature(uint8_t action) {
         return "Continuous AP method unsupported";
       return continuousApControlApply(next) ? nullptr : "save failed";
     }
+    case BC_ACTION_TOGGLE_LISTEN_ONLY:
+      // Same transition the USB logger uses; waits for the CAN supervisor.
+      return canUsbRequestMode(!canUsbPassive()) ? nullptr : "listen-only switch failed";
     case BC_ACTION_TOGGLE_BATTERY_PREHEAT: {
       const bool next = !preheatEnabled;
       if (next && !activeProfilePreheatSupported()) return "preheat unavailable";
@@ -615,6 +648,20 @@ static const char *bcRunActionLocked(uint32_t now, uint8_t action) {
     }
     case BC_ACTION_CAMERA:
       return bcCameraPressStartLocked(now) ? nullptr : "camera button busy";
+    case BC_ACTION_OPEN_FRUNK: {
+      uint8_t gear = BC_GEAR_INVALID;
+      const bool speedFresh = bcAgeFreshPure(now, bcState.speedMs, bcState.speedValid, BC_SPEED_FRESH_MS);
+      if (!bcGearFreshLocked(now, gear) || gear != BC_GEAR_P ||
+          (speedFresh && (bcState.kph10 > 20 || bcState.kph10 < -20))) {
+        bcState.frunkRefused++;
+        return "frunk only opens in P";
+      }
+      if (bcState.frunkCmd.active) return "frunk command busy";
+      bcState.frunkCmd.active = true;
+      bcState.frunkCmd.framesLeft = BC_ONE_SHOT_FRAMES;
+      bcState.frunkCmd.startMs = now;
+      return nullptr;
+    }
     default:
       if (bodyComfortApplyToggleActionPure(bcCfg, action)) {
         bcCfgDirty = true;
@@ -923,16 +970,69 @@ static void bcMacroServiceLocked(uint32_t now, uint8_t *actions, uint8_t &action
   }
 }
 
+// Door-handle macro: holding an enabled exterior handle for dhHoldS runs
+// dhAction once per pull. Reported as buttons 8 (driver) / 9 (passenger).
+static constexpr uint8_t BC_HANDLE_BUTTON_BASE = 8u;
+
+static void bcHandleServiceLocked(uint32_t now, uint8_t *actions, uint8_t &actionCount) {
+  for (uint8_t side = 0; side < 2u; ++side) {
+    const bool fresh = bcAgeFreshPure(now, bcState.doorMs[side], bcState.doorValid[side], BC_DOOR_FRESH_MS);
+    const bool armed = bcCfg.dhEnabled && ((bcCfg.dhDoorMask >> side) & 1u) != 0u;
+    if (!armed || !fresh || !bcState.handlePulled[side]) {
+      bcState.handleTiming[side] = false;
+      bcState.handleFired[side] = false;
+      continue;
+    }
+    if (!bcState.handleTiming[side]) {
+      bcState.handleTiming[side] = true;
+      bcState.handleSinceMs[side] = now;
+    }
+    if (bcState.handleFired[side] ||
+        (uint32_t)(now - bcState.handleSinceMs[side]) < (uint32_t)bcCfg.dhHoldS * 1000u)
+      continue;
+    bcState.handleFired[side] = true;
+    bcState.macroEvents++;
+    bcState.lastMacroButton = (uint8_t)(BC_HANDLE_BUTTON_BASE + side);
+    bcState.lastMacroGesture = BC_GESTURE_LONG;
+    bcState.lastMacroAction = bcCfg.dhAction;
+    bcState.lastMacroMs = now;
+    if (bcCfg.dhAction != BC_ACTION_NONE && actionCount < BC_MACRO_QUEUE_LEN)
+      actions[actionCount++] = bcCfg.dhAction;
+  }
+}
+
+static uint8_t bcKickdownServiceLocked(uint32_t now, bool &gearDOut) {
+  uint8_t gear = BC_GEAR_INVALID;
+  BcKickdownInputPure in = {};
+  in.enabled = bcCfg.kdEnabled && activeProfilePedalMapSupported();
+  in.gearD = bcGearFreshLocked(now, gear) && gear == BC_GEAR_D;
+  in.pedalValid = bcAgeFreshPure(now, bcState.pedalMs, bcState.pedalValid, BC_GEAR_FRESH_MS);
+  in.pedalPct10 = bcState.pedalPct10;
+  in.brakeValid = bcAgeFreshPure(now, bcState.brakeMs, bcState.brakeValid, BC_GEAR_FRESH_MS);
+  in.brakeOn = bcState.brakeOn;
+  gearDOut = in.gearD;
+  return bcKickdownStepPure(bcState.kickdown, now, in, bcCfg);
+}
+
+static void bcOneShotDoneLocked(uint32_t now, BcOneShotRuntime &cmd, uint32_t &ok, uint32_t &timeouts) {
+  if (!cmd.active) return;
+  if (cmd.framesLeft != 0u && (uint32_t)(now - cmd.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) return;
+  if (cmd.framesLeft < BC_ONE_SHOT_FRAMES) ok++;
+  else timeouts++;
+  cmd = {};
+}
+
 static void bodyComfortServiceTick(uint32_t now) {
   if (bodyComfortActiveBus() == BC_BUS_NONE) return;
-  uint8_t actions[BC_MACRO_QUEUE_LEN];
+  uint8_t actions[BC_MACRO_QUEUE_LEN + 2u];
   uint8_t actionCount = 0;
   bool save = false;
   BodyComfortConfigPure toSave = {};
-  uint8_t existing[BC_MACRO_QUEUE_LEN];
+  uint8_t existing[BC_MACRO_QUEUE_LEN + 2u];
   uint8_t existingCount = 0;
   portENTER_CRITICAL(&bcMux);
   bcMacroServiceLocked(now, actions, actionCount);
+  bcHandleServiceLocked(now, actions, actionCount);
   for (uint8_t i = 0; i < actionCount; ++i) {
     const char *r = bcRunActionLocked(now, actions[i]);
     if (r == BC_DEFERRED_EXISTING) existing[existingCount++] = actions[i];
@@ -942,6 +1042,12 @@ static void bodyComfortServiceTick(uint32_t now) {
   bcWindowCommandServiceLocked(now);
   bcMirrorServiceLocked(now);
   bcHazardServiceLocked(now);
+  bcOneShotDoneLocked(now, bcState.frunkCmd, bcState.frunkOpens, bcState.frunkRefused);
+  bool kdGearD = false;
+  const uint8_t kdAction = bcKickdownServiceLocked(now, kdGearD);
+  const uint8_t kdTarget = bcCfg.kdTargetRaw;
+  const uint8_t kdRelease = bcCfg.kdReleaseMode == BC_KD_RELEASE_STOCK
+      ? PEDAL_MAP_RAW_STOCK : PEDAL_MAP_RAW_CHILL;
   if (bcCfgDirty && (uint32_t)(now - bcCfgDirtyMs) >= BC_CFG_SAVE_DEBOUNCE_MS) {
     bcCfgDirty = false;
     toSave = bcCfg;
@@ -952,6 +1058,22 @@ static void bodyComfortServiceTick(uint32_t now) {
     const char *r = bodyComfortToggleExistingFeature(existing[i]);
     portENTER_CRITICAL(&bcMux);
     bcState.lastMacroResult = r ? r : "OK";
+    portEXIT_CRITICAL(&bcMux);
+  }
+  if (kdAction != BC_KD_ACTION_NONE) {
+    // Existing Pedal Response path: same AP / Summon / 0x334 freshness gates.
+    const bool ok = requestPedalMapMode(
+        kdAction == BC_KD_ACTION_ENGAGE ? kdTarget : kdRelease,
+        kdAction == BC_KD_ACTION_ENGAGE ? "Kickdown" : "Kickdown release");
+    portENTER_CRITICAL(&bcMux);
+    if (!ok) {
+      bcKickdownRequestFailedPure(bcState.kickdown, now, kdAction, kdGearD);
+      bcState.kickdownRefused++;
+    } else if (kdAction == BC_KD_ACTION_ENGAGE) {
+      bcState.kickdownEngages++;
+    } else {
+      bcState.kickdownReleases++;
+    }
     portEXIT_CRITICAL(&bcMux);
   }
   if (save && !bodyComfortCfgPersist(toSave)) {
@@ -1066,6 +1188,17 @@ static String bodyComfortJson() {
   jw.u32("rvLightMode", c.rvLightMode);
   jw.boolean("drHazard", c.drHazard);
   jw.u32("drOffDelayMs", c.drOffDelayMs);
+  jw.boolean("kdEnabled", c.kdEnabled);
+  jw.u32("kdTriggerPct", c.kdTriggerPct);
+  jw.u32("kdTargetRaw", c.kdTargetRaw);
+  jw.boolean("kdReleaseOnPedal", c.kdReleaseOnPedal);
+  jw.u32("kdReleasePct", c.kdReleasePct);
+  jw.boolean("kdReleaseOnBrake", c.kdReleaseOnBrake);
+  jw.u32("kdReleaseMode", c.kdReleaseMode);
+  jw.boolean("dhEnabled", c.dhEnabled);
+  jw.u32("dhDoorMask", c.dhDoorMask);
+  jw.u32("dhHoldS", c.dhHoldS);
+  jw.u32("dhAction", c.dhAction);
   jw.endObject();
 
   const bool gearFresh = bcAgeFreshPure(now, s.gearMs, s.gearValid, BC_GEAR_FRESH_MS);
@@ -1110,6 +1243,18 @@ static String bodyComfortJson() {
   jw.boolean("reverseHazard", s.reverseHazardWanted);
   jw.boolean("doorHazard", s.doorHazardWanted);
   jw.boolean("rearLight", s.rearLightActive);
+  const bool pedalFresh = bcAgeFreshPure(now, s.pedalMs, s.pedalValid, BC_GEAR_FRESH_MS);
+  const bool brakeFresh = bcAgeFreshPure(now, s.brakeMs, s.brakeValid, BC_GEAR_FRESH_MS);
+  if (pedalFresh) jw.fixed("pedalPct", s.pedalPct10, 1);
+  else jw.raw("pedalPct", "null");
+  jw.string("brake", brakeFresh ? (s.brakeOn ? "ON" : "OFF") : "?");
+  jw.string("kickdown", !c.kdEnabled ? "OFF" : !activeProfilePedalMapSupported() ? "UNSUPPORTED"
+                        : s.kickdown.kicked ? "KICKED" : "ARMED");
+  const bool lFresh = bcAgeFreshPure(now, s.doorMs[0], s.doorValid[0], BC_DOOR_FRESH_MS);
+  const bool rFresh = bcAgeFreshPure(now, s.doorMs[1], s.doorValid[1], BC_DOOR_FRESH_MS);
+  jw.string("handles", String("DRIVER:") + (!lFresh ? "?" : s.handlePulled[0] ? "PULLED" : "-") +
+                       " PASSENGER:" + (!rFresh ? "?" : s.handlePulled[1] ? "PULLED" : "-"));
+  jw.boolean("listenOnly", canUsbPassive());
   jw.endObject();
 
   jw.beginObject("stats");
@@ -1130,6 +1275,11 @@ static String bodyComfortJson() {
   jw.u32("seatbeltInjected", s.seatbeltInjected);
   jw.u32("seatbeltBadChecksum", s.seatbeltBadChecksum);
   jw.u32("rearLightInjected", s.rearLightInjected);
+  jw.u32("kickdownEngages", s.kickdownEngages);
+  jw.u32("kickdownReleases", s.kickdownReleases);
+  jw.u32("kickdownRefused", s.kickdownRefused);
+  jw.u32("frunkOpens", s.frunkOpens);
+  jw.u32("frunkRefused", s.frunkRefused);
   jw.u32("macroEvents", s.macroEvents);
   jw.u32("macroDropped", s.macroDropped);
   jw.u32("lastMacroButton", s.lastMacroButton);
@@ -1215,6 +1365,17 @@ static void httpBodyComfortUpdate() {
   BC_UINT_FIELD("rvLightMode", 0u, 2u, rvLightMode, uint8_t)
   BC_BOOL_FIELD("drHazard", drHazard)
   BC_UINT_FIELD("drOffDelayMs", 0u, 10000u, drOffDelayMs, uint16_t)
+  BC_BOOL_FIELD("kdEnabled", kdEnabled)
+  BC_UINT_FIELD("kdTriggerPct", 10u, 100u, kdTriggerPct, uint8_t)
+  BC_UINT_FIELD("kdTargetRaw", 1u, 2u, kdTargetRaw, uint8_t)
+  BC_BOOL_FIELD("kdReleaseOnPedal", kdReleaseOnPedal)
+  BC_UINT_FIELD("kdReleasePct", 0u, 90u, kdReleasePct, uint8_t)
+  BC_BOOL_FIELD("kdReleaseOnBrake", kdReleaseOnBrake)
+  BC_UINT_FIELD("kdReleaseMode", 0u, 1u, kdReleaseMode, uint8_t)
+  BC_BOOL_FIELD("dhEnabled", dhEnabled)
+  BC_UINT_FIELD("dhDoorMask", 0u, 3u, dhDoorMask, uint8_t)
+  BC_UINT_FIELD("dhHoldS", 1u, 10u, dhHoldS, uint8_t)
+  BC_UINT_FIELD("dhAction", 0u, BC_ACTION_COUNT - 1u, dhAction, uint8_t)
 #undef BC_BOOL_FIELD
 #undef BC_UINT_FIELD
   // Macro slot: mc=<button>,<gesture>,<action>
@@ -1241,6 +1402,15 @@ static void httpBodyComfortUpdate() {
     any = true;
   }
   if (!any) { bcSendError(400, "no settings"); return; }
+  if (next.dhAction == BC_ACTION_RETIRED_4) { bcSendError(400, "invalid dhAction"); return; }
+  if (next.kdReleasePct + 5u > next.kdTriggerPct) {
+    bcSendError(400, "kickdown release must be at least 5% below the trigger");
+    return;
+  }
+  if (!next.kdReleaseOnPedal && !next.kdReleaseOnBrake) {
+    bcSendError(400, "choose at least one kickdown release condition");
+    return;
+  }
   bodyComfortSanitizePure(next);
   if (!bodyComfortCfgPersist(next)) { bcSendError(500, "Settings could not be saved"); return; }
   portENTER_CRITICAL(&bcMux);

@@ -434,6 +434,10 @@ static void canTaskMcp(void* arg) {
       mcpRxCount++;
       canRxObserve(CAN_RX_BUS_PARTY, frameNow);
       if ((rxf.can_id & 0xC0000000UL) == 0) preheatRuntimeIngestCanA(rxf);
+      // Body Comfort observes in listen-only too (wheel macros can switch it
+      // back); its transmit helper refuses while TX is held.
+      if ((rxf.can_id & 0xC0000000UL) == 0)
+        bodyComfortObserve(BC_BUS_A, (uint16_t)(rxf.can_id & 0x7FF), rxf.data, rxf.can_dlc);
       if (canUsbPassive()) continue;
       // All downstream Model YL decoders and TX decisions expect standard
       // 11-bit DATA frames. Aggregate telemetry still counts rejected frames.
@@ -443,7 +447,6 @@ static void canTaskMcp(void* arg) {
       if (activeProfileIsModelS2017() && partyId == 0x045u && rxf.can_dlc == 8u)
         tsl9ModelSObserveRightStock(0u, rxf.data, rxf.can_dlc);
       canTxMarkFresh(CAN_TX_FRESH_PARTY); // physical CAN A fresh in this recovery epoch
-      bodyComfortObserve(BC_BUS_A, partyId, rxf.data, rxf.can_dlc);
       bootCaptureObservePartyFrame(partyId, rxf.can_dlc, rxf.data);
       researchCaptureObserveParty(partyId, rxf.can_dlc, rxf.data);
       driverMonitorCaptureObserve(DRIVER_MONITOR_BUS_A, partyId, rxf.can_dlc, rxf.data);
@@ -658,10 +661,11 @@ static void canTaskTwai(void* arg) {
       lastCanBFrameMs = frameNow;
       canRxObserve(CAN_RX_BUS_VH, frameNow);
       if (!f.extd && !f.rtr) preheatRuntimeIngestCanB(f);
+      if (!f.extd && !f.rtr)
+        bodyComfortObserve(BC_BUS_B, (uint16_t)f.identifier, f.data, f.data_length_code);
       // Only standard 11-bit DATA frames may reach Tesla decoders or TX paths.
       if (!canUsbPassive() && !f.extd && !f.rtr) {
         canTxMarkFresh(CAN_TX_FRESH_VH);
-        bodyComfortObserve(BC_BUS_B, (uint16_t)f.identifier, f.data, f.data_length_code);
         bootCaptureObserveVhFrame(f.identifier, f.data_length_code);
         researchCaptureObserveVh((uint16_t)f.identifier, f.data_length_code, f.data);
         driverMonitorCaptureObserve(DRIVER_MONITOR_BUS_B, (uint16_t)f.identifier, f.data_length_code, f.data);

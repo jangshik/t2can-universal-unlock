@@ -162,6 +162,20 @@ static ContApRoute continuousApGestureRoutePure(uint8_t, uint8_t, ContApMethod m
   return m == ContApMethod::Unset ? ContApRoute::None : ContApRoute::BodyA;
 }
 static bool continuousApControlApply(ContApConfig c) { if (!g_saveOk) return false; g_contAp = c; return true; }
+// Pedal map (existing Pedal Response) and listen-only stand-ins.
+#include "pedal_map_session_pure.h"
+static bool g_pedalMapOk = true;
+static std::vector<uint8_t> g_pedalRequests;
+static inline bool activeProfilePedalMapSupported() { return g_supported; }
+static bool requestPedalMapMode(uint8_t raw, const char *) {
+  g_pedalRequests.push_back(raw);
+  return g_pedalMapOk;
+}
+static bool g_passive = false;
+static int g_listenRequests = 0;
+static bool canUsbPassive() { return g_passive; }
+static bool canUsbTxHeld() { return g_passive; }
+static bool canUsbRequestMode(bool passive) { g_listenRequests++; g_passive = passive; return true; }
 
 // ─── CAN TX stubs (record every frame) ───────────────────────────────────
 struct can_frame { uint32_t can_id; uint8_t can_dlc; uint8_t data[8]; };
@@ -196,6 +210,9 @@ static esp_err_t canTxTwaiTransmitTagged(const twai_message_t *m, uint32_t, uint
 // ─── Simulated vehicle ───────────────────────────────────────────────────
 struct Car {
   uint8_t gear = BC_GEAR_P;
+  uint8_t pedalRaw = 0;     // 0.4 % steps
+  uint8_t brake = 0;        // 0 OFF 1 ON
+  bool handle[2] = {false, false};
   int32_t kph10 = 0;
   uint8_t latch[4] = {2, 2, 2, 2};      // CLOSED
   uint8_t mirror[2] = {2, 2};           // UNFOLDED
@@ -216,7 +233,8 @@ static void rx(uint16_t id, const uint8_t d[8]) { bodyComfortObserve(g_bus, id, 
 
 static void sendFrames() {
   uint8_t d[8];
-  memset(d, 0, 8); bcSetBitsPure(d, 21, 3, car.gear); rx(0x118, d);
+  memset(d, 0, 8); bcSetBitsPure(d, 21, 3, car.gear); bcSetBitsPure(d, 32, 8, car.pedalRaw);
+  bcSetBitsPure(d, 19, 2, car.brake); rx(0x118, d);
   memset(d, 0, 8); bcSetBitsPure(d, 43, 13, (uint32_t)((car.kph10 + 400) * 5 / 4)); rx(0x257, d);
   for (uint8_t side = 0; side < 2; ++side) {
     const uint8_t front = side == 0 ? BC_DOOR_FL : BC_DOOR_FR;
@@ -225,6 +243,7 @@ static void sendFrames() {
     bcSetBitsPure(d, 14, 4, car.latch[front]);
     bcSetBitsPure(d, 18, 4, car.latch[rear]);
     bcSetBitsPure(d, 52, 3, car.mirror[side]);
+    bcSetBitsPure(d, 10, 1, car.handle[side] ? 1u : 0u);
     rx(side == 0 ? 0x102 : 0x103, d);
     memset(d, 0, 8);
     bcSetBitsPure(d, 1, 4, car.winMotion[front]);
@@ -281,6 +300,9 @@ static void resetAll() {
   car = Car();
   g_tx.clear();
   g_nvs.clear();
+  g_pedalRequests.clear();
+  g_pedalMapOk = true;
+  g_passive = false;
 }
 
 static void testUnsupportedTopologies() {
@@ -750,7 +772,180 @@ static void testExistingFeatureMacros() {
   server.args = {{"id", "4"}}; httpBodyComfortAction(); assert(server.lastCode == 400);
   server.args = {{"mc", "0,0,4"}}; httpBodyComfortUpdate(); assert(server.lastCode == 400);
   server.args = {{"mc", "0,0,19"}}; httpBodyComfortUpdate(); assert(server.lastCode == 200);
-  server.args = {{"mc", "0,0,20"}}; httpBodyComfortUpdate(); assert(server.lastCode == 400);
+  server.args = {{"mc", "0,0,22"}}; httpBodyComfortUpdate(); assert(server.lastCode == 200);
+  server.args = {{"mc", "0,0,23"}}; httpBodyComfortUpdate(); assert(server.lastCode == 400);
+}
+
+static void testKickdown() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.kdEnabled = true;
+  c.kdTriggerPct = 80;
+  c.kdReleasePct = 20;
+  c.kdTargetRaw = BC_KD_TARGET_SPORT;
+  setCfg(c);
+  car.gear = BC_GEAR_D;
+  car.pedalRaw = 150;  // 60 %
+  run(1000);
+  assert(g_pedalRequests.empty());
+  car.pedalRaw = 210;  // 84 %
+  run(300);
+  assert(g_pedalRequests.size() == 1 && g_pedalRequests[0] == PEDAL_MAP_RAW_PERFORMANCE);
+  assert(bcState.kickdown.kicked && bcState.kickdownEngages == 1);
+  // Staying above, or dipping to 50 %, keeps the kicked mode.
+  car.pedalRaw = 125;
+  run(2000);
+  assert(g_pedalRequests.size() == 1);
+  // Pedal at/below 20 % for 0.5 s returns to Comfort (Chill).
+  car.pedalRaw = 40;   // 16 %
+  run(300);
+  assert(g_pedalRequests.size() == 1);
+  run(500);
+  assert(g_pedalRequests.size() == 2 && g_pedalRequests[1] == PEDAL_MAP_RAW_CHILL);
+  assert(!bcState.kickdown.kicked);
+  // Brake releases immediately; brake held never engages.
+  car.pedalRaw = 230;
+  run(300);
+  assert(g_pedalRequests.size() == 3 && bcState.kickdown.kicked);
+  car.brake = 1;
+  run(150);
+  assert(g_pedalRequests.size() == 4 && g_pedalRequests[3] == PEDAL_MAP_RAW_CHILL);
+  run(1000);
+  assert(g_pedalRequests.size() == 4);
+  car.brake = 0;
+  // Brake release disabled: brake no longer releases; release mode "stock".
+  bcCfg.kdReleaseOnBrake = false;
+  bcCfg.kdReleaseMode = BC_KD_RELEASE_STOCK;
+  run(300);
+  assert(g_pedalRequests.size() == 5 && bcState.kickdown.kicked);
+  car.brake = 1;
+  car.pedalRaw = 0;
+  run(200);
+  assert(g_pedalRequests.size() == 5);
+  run(500);
+  assert(g_pedalRequests.size() == 6 && g_pedalRequests[5] == PEDAL_MAP_RAW_STOCK);
+  car.brake = 0;
+  // Refused request: retried after 300 ms, state stays consistent.
+  bcCfg.kdReleaseOnBrake = true;
+  bcCfg.kdReleaseMode = BC_KD_RELEASE_COMFORT;
+  g_pedalMapOk = false;
+  car.pedalRaw = 240;
+  run(250);
+  assert(!bcState.kickdown.kicked && bcState.kickdownRefused >= 1);
+  g_pedalMapOk = true;
+  run(500);
+  assert(bcState.kickdown.kicked);
+  // Leaving D releases; a refused release outside D is not retried.
+  g_pedalMapOk = false;
+  car.gear = BC_GEAR_P;
+  car.pedalRaw = 0;
+  const size_t before = g_pedalRequests.size();
+  run(1000);
+  assert(!bcState.kickdown.kicked && g_pedalRequests.size() == before + 1);
+  g_pedalMapOk = true;
+  // Not in D: no engage. Disabled: no engage.
+  car.pedalRaw = 250;
+  run(1000);
+  assert(g_pedalRequests.size() == before + 1);
+  car.gear = BC_GEAR_D;
+  bcCfg.kdEnabled = false;
+  run(1000);
+  assert(g_pedalRequests.size() == before + 1);
+  // Unsupported pedal-map profile: never engages.
+  bcCfg.kdEnabled = true;
+  g_supported = false;
+  run(1000);
+  assert(g_pedalRequests.size() == before + 1);
+  g_supported = true;
+  // HTTP validation.
+  server.args = {{"kdTriggerPct", "30"}, {"kdReleasePct", "28"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 400);
+  server.args = {{"kdReleaseOnPedal", "0"}, {"kdReleaseOnBrake", "0"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 400);
+  server.args = {{"kdTriggerPct", "70"}, {"kdReleasePct", "10"}, {"kdTargetRaw", "1"}, {"kdReleaseMode", "1"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 200 && bcCfg.kdTriggerPct == 70 && bcCfg.kdReleaseMode == 1);
+  assert(server.lastBody.find("\"kickdown\":") != std::string::npos);
+  server.args = {{"kdTargetRaw", "3"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 400);
+}
+
+static void testDoorHandleFrunk() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.dhEnabled = true;
+  c.dhDoorMask = 0x01u;  // driver only
+  c.dhHoldS = 2;
+  setCfg(c);
+  run(500);
+  // Short pull (normal door opening): nothing.
+  car.handle[0] = true; run(800); car.handle[0] = false; run(500);
+  assert(takeTx(0x273).empty());
+  // Passenger not selected.
+  car.handle[1] = true; run(3000); car.handle[1] = false; run(300);
+  assert(takeTx(0x273).empty());
+  // Driver hold >= 2 s opens the frunk once.
+  car.handle[0] = true; run(1800);
+  assert(takeTx(0x273).empty());
+  run(600);
+  auto f = takeTx(0x273);
+  assert(!f.empty() && bcGetBitsPure(f[0].data, 5, 1) == 1u && f[0].data[2] == 0x11);
+  assert(bcState.lastMacroButton == BC_HANDLE_BUTTON_BASE && bcState.lastMacroAction == BC_ACTION_OPEN_FRUNK);
+  g_tx.clear();
+  run(3000);  // still held: no repeat
+  assert(takeTx(0x273).empty());
+  car.handle[0] = false; run(300);
+  assert(bcState.frunkOpens == 1);
+  // Both doors selected: passenger works too.
+  bcCfg.dhDoorMask = 0x03u;
+  car.handle[1] = true; run(2500); car.handle[1] = false; run(300);
+  assert(!takeTx(0x273).empty());
+  // Not in P: refused, nothing sent.
+  g_tx.clear();
+  car.gear = BC_GEAR_D;
+  car.handle[0] = true; run(2500); car.handle[0] = false; run(300);
+  assert(takeTx(0x273).empty() && std::string(bcState.lastMacroResult) == "frunk only opens in P");
+  car.gear = BC_GEAR_P;
+  // Door-handle action can be any macro action, e.g. hazard blink.
+  bcCfg.dhAction = BC_ACTION_TOGGLE_REVERSE_HAZARD;
+  car.handle[0] = true; run(2500); car.handle[0] = false; run(300);
+  assert(bcCfg.rvHazard);
+  // Wheel macro can open the frunk as well; HTTP rejects the retired action.
+  server.args = {{"dhAction", "4"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 400);
+  server.args = {{"id", "20"}};
+  httpBodyComfortAction();
+  assert(server.lastCode == 200);
+}
+
+static void testListenOnly() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.mcEnabled = true;
+  c.sbEnabled = true;
+  c.mcAction[BC_BTN_VOICE][BC_GESTURE_LONG] = BC_ACTION_TOGGLE_LISTEN_ONLY;
+  setCfg(c);
+  car.rearUnbuckled[0] = 1;
+  run(300);
+  assert(!takeTx(0x3A1).empty());
+  // Long voice press: listen-only ON through the same transition the USB logger uses.
+  car.buttons[BC_BTN_VOICE] = true; run(1000); car.buttons[BC_BTN_VOICE] = false; run(200);
+  assert(g_passive && g_listenRequests == 1);
+  g_tx.clear();
+  const uint32_t failsBefore = bcState.txFail;
+  run(1000);
+  assert(g_tx.empty() && bcState.txFail == failsBefore);  // nothing sent, not counted as failure
+  // Macros still work in listen-only: long press again turns it off.
+  car.buttons[BC_BTN_VOICE] = true; run(1000); car.buttons[BC_BTN_VOICE] = false; run(200);
+  assert(!g_passive && g_listenRequests == 2);
+  run(300);
+  assert(!takeTx(0x3A1).empty());
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("\"listenOnly\":false") != std::string::npos);
 }
 
 int main() {
@@ -767,6 +962,9 @@ int main() {
   testHazardBlinkAndMacros();
   testHttp();
   testExistingFeatureMacros();
+  testKickdown();
+  testDoorHandleFrunk();
+  testListenOnly();
   std::puts("body_comfort_runtime host: all tests passed");
   return 0;
 }

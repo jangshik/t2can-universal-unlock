@@ -374,7 +374,7 @@ static void testConfigBlob() {
   assert(r.eeEnabled && r.eeDoorMask == 0x05 && r.eeRestoreDelayMs == 1234 && r.eeMirrorFold);
   assert(r.sbEnabled && r.sbSeatMask == 0x02 && r.mcEnabled && r.rvLight);
   assert(r.rvLightMode == BC_REAR_LIGHT_FOG && r.drOffDelayMs == 4500 && r.eeWeatherBlock);
-  assert(BC_CFG_BLOB_LEN == 42u && blob[0] == 2u);
+  assert(BC_CFG_BLOB_LEN == 50u && blob[0] == 3u);
   // v1 (36-byte, six wheel controls) blobs still load; voice/camera start empty.
   uint8_t v1[BC_CFG_BLOB_LEN_V1];
   memcpy(v1, blob, BC_CFG_BLOB_LEN_V1 - 1u);
@@ -411,7 +411,11 @@ static void testConfigBlob() {
   assert(bcActionIsExistingFeaturePure(BC_ACTION_TOGGLE_NAG_KILLER));
   assert(bcActionIsExistingFeaturePure(BC_ACTION_TOGGLE_BATTERY_PREHEAT));
   assert(!bcActionIsExistingFeaturePure(BC_ACTION_CAMERA));
-  assert(BC_ACTION_COUNT == 20u);
+  assert(BC_ACTION_COUNT == 23u);
+  assert(bcActionIsExistingFeaturePure(BC_ACTION_TOGGLE_LISTEN_ONLY));
+  assert(!bcActionIsExistingFeaturePure(BC_ACTION_OPEN_FRUNK));
+  assert(!bcActionIsExistingFeaturePure(BC_ACTION_TOGGLE_KICKDOWN));
+  assert(bodyComfortApplyToggleActionPure(t, BC_ACTION_TOGGLE_KICKDOWN) && t.kdEnabled);
   // The retired "toggle hazard blink" slot (4) loads as NONE.
   BodyComfortConfigPure retired = bodyComfortDefaultsPure();
   retired.mcAction[2][1] = BC_ACTION_RETIRED_4;
@@ -441,6 +445,83 @@ static void testWifiTiming() {
   assert(wifiApHideDuePure(t, false, true, 6000u, 0xFFFFF000u));   // 10.1 s across wrap
 }
 
+static void testKickdownPureAndV3() {
+  // Decoders.
+  uint8_t d[8] = {};
+  uint16_t pct = 0; bool brake = true;
+  bcSetBitsPure(d, 32, 8, 225u);
+  assert(bcDecodeAccelPedalPure(d, 8, pct) && pct == 900u);
+  bcSetBitsPure(d, 32, 8, 255u);
+  assert(!bcDecodeAccelPedalPure(d, 8, pct));
+  assert(bcDecodeBrakePure(d, 8, brake) && !brake);
+  bcSetBitsPure(d, 19, 2, 1u);
+  assert(bcDecodeBrakePure(d, 8, brake) && brake);
+  bcSetBitsPure(d, 19, 2, 2u);
+  assert(!bcDecodeBrakePure(d, 8, brake));
+  uint8_t door[8] = {};
+  bcSetBitsPure(door, 10, 1, 1u);
+  BcDoorFramePure f = {};
+  assert(bcDecodeDoorFramePure(door, 8, f) && f.frontHandlePulled);
+  uint8_t ui[8] = {};
+  bcSetFrunkRequestPure(ui);
+  assert(ui[0] == 0x20u);
+  // Step function.
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.kdEnabled = true;
+  BcKickdownPure k = {};
+  BcKickdownInputPure in = {true, true, true, 900, true, false};
+  assert(bcKickdownStepPure(k, 0, in, c) == BC_KD_ACTION_NONE);
+  assert(bcKickdownStepPure(k, 99, in, c) == BC_KD_ACTION_NONE);
+  assert(bcKickdownStepPure(k, 100, in, c) == BC_KD_ACTION_ENGAGE && k.kicked);
+  in.pedalPct10 = 200;
+  assert(bcKickdownStepPure(k, 200, in, c) == BC_KD_ACTION_NONE);
+  assert(bcKickdownStepPure(k, 700, in, c) == BC_KD_ACTION_RELEASE && !k.kicked);
+  // Brake blocks engagement.
+  in.pedalPct10 = 1000; in.brakeOn = true;
+  assert(bcKickdownStepPure(k, 1000, in, c) == BC_KD_ACTION_NONE);
+  assert(bcKickdownStepPure(k, 2000, in, c) == BC_KD_ACTION_NONE && !k.kicked);
+  // Failure handling.
+  in.brakeOn = false;
+  bcKickdownStepPure(k, 3000, in, c);
+  assert(bcKickdownStepPure(k, 3100, in, c) == BC_KD_ACTION_ENGAGE);
+  bcKickdownRequestFailedPure(k, 3100, BC_KD_ACTION_ENGAGE, true);
+  assert(!k.kicked && bcKickdownStepPure(k, 3300, in, c) == BC_KD_ACTION_NONE);
+  bcKickdownStepPure(k, 3400, in, c);
+  assert(bcKickdownStepPure(k, 3500, in, c) == BC_KD_ACTION_ENGAGE);
+  in.gearD = false;
+  assert(bcKickdownStepPure(k, 3600, in, c) == BC_KD_ACTION_RELEASE);
+  bcKickdownRequestFailedPure(k, 3600, BC_KD_ACTION_RELEASE, false);
+  assert(!k.kicked);  // no retry outside D
+  // Sanitize keeps a release path and a gap below the trigger.
+  BodyComfortConfigPure s = bodyComfortDefaultsPure();
+  s.kdTriggerPct = 30; s.kdReleasePct = 50; s.kdReleaseOnPedal = false; s.kdReleaseOnBrake = false;
+  s.kdTargetRaw = 7; s.kdReleaseMode = 9; s.dhDoorMask = 0xFF; s.dhHoldS = 0; s.dhAction = 4;
+  bodyComfortSanitizePure(s);
+  assert(s.kdReleasePct == 25 && s.kdReleaseOnPedal && s.kdTargetRaw == BC_KD_TARGET_STANDARD);
+  assert(s.kdReleaseMode == 0 && s.dhDoorMask == 3 && s.dhHoldS == 1 && s.dhAction == BC_ACTION_NONE);
+  // Config v3 round trip and v2 migration.
+  BodyComfortConfigPure v = bodyComfortDefaultsPure();
+  assert(v.dhAction == BC_ACTION_OPEN_FRUNK && v.dhDoorMask == 1 && v.kdTriggerPct == 90);
+  v.kdEnabled = true; v.kdTriggerPct = 75; v.kdTargetRaw = 2; v.kdReleasePct = 15;
+  v.kdReleaseOnBrake = false; v.kdReleaseMode = 1; v.dhEnabled = true; v.dhDoorMask = 3;
+  v.dhHoldS = 4; v.dhAction = BC_ACTION_TOGGLE_TLSSC; v.mcAction[7][2] = BC_ACTION_OPEN_FRUNK;
+  uint8_t blob[BC_CFG_BLOB_LEN];
+  bodyComfortSerializePure(v, blob);
+  BodyComfortConfigPure r = {};
+  assert(bodyComfortDeserializePure(blob, BC_CFG_BLOB_LEN, r));
+  assert(r.kdEnabled && r.kdTriggerPct == 75 && r.kdTargetRaw == 2 && r.kdReleasePct == 15);
+  assert(!r.kdReleaseOnBrake && r.kdReleaseOnPedal && r.kdReleaseMode == 1);
+  assert(r.dhEnabled && r.dhDoorMask == 3 && r.dhHoldS == 4 && r.dhAction == BC_ACTION_TOGGLE_TLSSC);
+  assert(r.mcAction[7][2] == BC_ACTION_OPEN_FRUNK);
+  uint8_t v2[BC_CFG_BLOB_LEN_V2];
+  memcpy(v2, blob, BC_CFG_BLOB_LEN_V2 - 1u);
+  v2[0] = 2u;
+  v2[BC_CFG_BLOB_LEN_V2 - 1u] = bcCfgBlobChecksumLenPure(v2, BC_CFG_BLOB_LEN_V2);
+  assert(bodyComfortDeserializePure(v2, BC_CFG_BLOB_LEN_V2, r));
+  assert(r.mcAction[7][2] == BC_ACTION_OPEN_FRUNK && !r.kdEnabled && !r.dhEnabled);
+  assert(r.dhAction == BC_ACTION_OPEN_FRUNK && r.kdTriggerPct == 90);
+}
+
 int main() {
   testBitHelpers();
   testDoorDecode();
@@ -455,6 +536,7 @@ int main() {
   testUnfold();
   testConfigBlob();
   testWifiTiming();
+  testKickdownPureAndV3();
   std::puts("body_comfort_pure: all tests passed");
   return 0;
 }
