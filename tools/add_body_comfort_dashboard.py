@@ -60,7 +60,7 @@ TEXT = {
         "kdR": "RELEASE AT OR BELOW (%)", "kdRb": "Release on brake", "kdRbD": "Any brake press switches back at once.",
         "kdRm": "Switch back to", "kdRmO": ["Comfort (Chill)", "Vehicle setting"],
         "hd": "Door Handle Macro",
-        "hdD": "Hold an exterior front door handle to run an action. Default action: open the frunk, only in P. A normal short pull does nothing.",
+        "hdD": "Works only while the car is unlocked and that door is open: pull the exterior front handle to open the door and keep holding it for the set time. Pulling a locked door does nothing until it unlocks and opens. Default action: open the frunk (only in P). A normal short pull does nothing.",
         "hdDr": "Driver door handle", "hdPs": "Passenger door handle", "hdS": "HOLD (s)", "hdA": "Action",
         "lo": "Listen-Only Mode",
         "loD": "CAN hardware only listens: nothing is sent or acknowledged, so every feature that sends CAN frames pauses. Dashboard, Wi-Fi and Bluetooth keep working. Saved across reboots.",
@@ -130,7 +130,7 @@ TEXT = {
         "kdR": "恢复阈值 (%)", "kdRb": "踩刹车时恢复", "kdRbD": "踩下刹车立即切回。",
         "kdRm": "切回到", "kdRmO": ["舒适 (Chill)", "车辆设置"],
         "hd": "车门把手宏",
-        "hdD": "按住前门外把手执行动作。默认动作：打开前备箱（仅限 P 挡）。正常短拉不会触发。",
+        "hdD": "仅在车辆已解锁且该车门已打开时有效：拉外把手打开车门后继续按住设定时间。车门上锁时拉动不会计时，直到解锁并打开。默认动作：打开前备箱（仅限 P 挡）。正常短拉不会触发。",
         "hdDr": "驾驶员车门把手", "hdPs": "乘客车门把手", "hdS": "按住 (s)", "hdA": "动作",
         "lo": "仅监听模式",
         "loD": "CAN 硬件只接收：不发送也不应答任何帧，所有发送 CAN 帧的功能暂停。仪表板、Wi-Fi 和蓝牙照常工作。重启后保持。",
@@ -251,7 +251,7 @@ function render(d){
   setChk('bcRl',c.rvLight);setVal('bcRlm',c.rvLightMode);setChk('bcDh',c.drHazard);setVal('bcDd',c.drOffDelayMs);
   setChk('bcKd',c.kdEnabled);setVal('bcKdTgt',c.kdTargetRaw===2?1:0);setVal('bcKdT',c.kdTriggerPct);setChk('bcKdRp',c.kdReleaseOnPedal);setVal('bcKdR',c.kdReleasePct);setChk('bcKdRb',c.kdReleaseOnBrake);setVal('bcKdRm',c.kdReleaseMode);
   setChk('bcHd',c.dhEnabled);setChk('bcHd0',c.dhDoorMask&1);setChk('bcHd1',(c.dhDoorMask>>1)&1);setVal('bcHdS',c.dhHoldS);setVal('bcHdA',c.dhAction);
-  setText('bcStKd',`${l.pedalPct==null?'—':l.pedalPct+' %'} · ${l.brake||'?'} · ${l.kickdown||'—'}`);setText('bcStHd',l.handles||'—');
+  setText('bcStKd',`${l.pedalPct==null?'—':l.pedalPct+' %'} · ${l.brake||'?'} · ${l.kickdown||'—'}`);setText('bcStHd',(l.handles||'—')+(l.lock?' · '+l.lock:''));
   if(typeof l.listenOnly==='boolean')window.__setListenOnly?.(l.listenOnly);
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));

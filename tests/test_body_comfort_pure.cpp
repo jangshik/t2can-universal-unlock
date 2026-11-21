@@ -462,6 +462,18 @@ static void testKickdownPureAndV3() {
   bcSetBitsPure(door, 10, 1, 1u);
   BcDoorFramePure f = {};
   assert(bcDecodeDoorFramePure(door, 8, f) && f.frontHandlePulled);
+  uint8_t lk[8] = {};
+  BcLockFramePure lock = {};
+  assert(!bcDecodeLockPure(lk, 8, lock));  // SNA
+  bcSetBitsPure(lk, 54, 2, 1u);
+  bcSetBitsPure(lk, 21, 1, 1u);
+  assert(bcDecodeLockPure(lk, 8, lock) && lock.simple == 1u && !lock.frontLocked[0] && lock.frontLocked[1]);
+  assert(bcHandleMacroAllowedPure(true, lock, 0, BC_DOOR_STATE_OPEN));
+  assert(!bcHandleMacroAllowedPure(true, lock, 1, BC_DOOR_STATE_OPEN));   // passenger door locked
+  assert(!bcHandleMacroAllowedPure(true, lock, 0, BC_DOOR_STATE_CLOSED)); // door not open
+  assert(!bcHandleMacroAllowedPure(false, lock, 0, BC_DOOR_STATE_OPEN));  // stale lock data
+  bcSetBitsPure(lk, 54, 2, 2u);
+  assert(bcDecodeLockPure(lk, 8, lock) && !bcHandleMacroAllowedPure(true, lock, 0, BC_DOOR_STATE_OPEN));
   uint8_t ui[8] = {};
   bcSetFrunkRequestPure(ui);
   assert(ui[0] == 0x20u);

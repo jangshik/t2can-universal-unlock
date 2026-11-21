@@ -101,6 +101,7 @@ https://discord.gg/euPbYG8Npc
 | 0x102 / 0x103 | VCLEFT / VCRIGHT_doorStatus | 14\|4, 18\|4 | front / rearLatchStatus: 1 OPENED, 3 CLOSING, 4 OPENING, 5 AJAR → 열림 / 2 CLOSED → 닫힘 / 그 외 → 알 수 없음 | 문 상태 (0x102 = FL·RL, 0x103 = FR·RR) |
 | 0x102 / 0x103 | 〃 | 52\|3 | mirrorFoldState: 1 FOLDED, 2 UNFOLDED, 3 FOLDING, 4 UNFOLDING | 미러 상태 |
 | 0x102 / 0x103 | 〃 | 10\|1 | VCLEFT / VCRIGHT_frontHandlePulled (외부 앞문 핸들 당김) | 9) 도어 핸들 매크로 (0x102 = 운전석, 0x103 = 조수석) |
+| 0x339 | VCSEC_authentication | 54\|2, 19\|1, 21\|1 | VCSEC_simpleLockStatus (1 UNLOCKED, 2 LOCKED), leftFrontLockStatus / rightFrontLockStatus (0 UNLOCKED, 1 LOCKED) | 9) 도어 핸들 매크로 잠금 조건 (3초 이내 값만) |
 | 0x118 | DI_systemStatus | 21\|3 | DI_gear: 1 P, 2 R, 3 N, 4 D (1.5초 이내 값만 사용) | 기어 |
 | 0x118 | DI_systemStatus | 32\|8 | DI_accelPedalPos = raw × 0.4 % (255 = SNA) | 킥다운 페달 |
 | 0x118 | DI_systemStatus | 19\|2 | DI_brakePedalState: 0 OFF, 1 ON, 2 INVALID | 킥다운 브레이크 해제 |
@@ -196,7 +197,11 @@ https://discord.gg/euPbYG8Npc
 
 **9) 도어 핸들 매크로**
 - 운전석(0x102)·조수석(0x103) **외부 앞문 핸들**을 각각 켜고 끌 수 있고, 둘 다 선택할 수 있습니다.
-- 핸들을 설정 시간(1–10초, 기본 2초) 이상 당기고 있으면 동작을 **한 번** 실행합니다. 핸들을 놓아야 다음 실행이 가능하고, 문을 여는 보통의 짧은 당김은 무시합니다.
+- **차량이 잠기지 않았고(0x339 `VCSEC_simpleLockStatus` = UNLOCKED, 해당 앞문 lockStatus = UNLOCKED) 그 문이 열려 있을 때(앞문 latch = OPENED/AJAR 등)만** 동작합니다.
+  - 핸들을 당겨 문을 열고 **계속 당긴 채로** 설정 시간(1–10초, 기본 2초)이 지나면 동작을 한 번 실행합니다.
+  - 시간은 세 조건(당김·잠금 해제·문 열림)이 모두 맞은 순간부터 셉니다. 그래서 잠긴 문을 당기면 아무 일도 없다가, 키로 잠금이 풀리고 문이 열린 뒤부터 계속 당기고 있으면 그때부터 N초 뒤에 실행됩니다(S3XY Commander와 같은 흐름).
+  - 0x339 잠금 정보가 3초 넘게 없으면 동작하지 않습니다(fail-closed).
+- 핸들을 놓아야 다음 실행이 가능하고, 문을 여는 보통의 짧은 당김은 무시합니다.
 - 동작은 매크로 목록에서 고를 수 있고, 기본값은 **프렁크 열기(동작 20)**입니다.
 - 프렁크 열기는 0x273 `UI_frunkRequest = 1`을 3프레임 보내며, **신선한 기어가 P이고 속도가 2 km/h 이하**일 때만 동작합니다. 그 외에는 거부하고 이유를 "Last macro"에 표시합니다.
 - 실시간 상태에는 핸들 당김이 "DRIVER:PULLED"처럼 표시되고, 매크로 기록에는 버튼 8(운전석 핸들)·9(조수석 핸들)로 남습니다.

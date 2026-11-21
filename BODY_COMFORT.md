@@ -76,7 +76,7 @@
 - 해제: 페달 ≤ 해제값 0.5초, 브레이크(0x118 `DI_brakePedalState` 19|2) 중 선택(최소 하나). D 이탈·기능 OFF 시 항상 해제. 해제 모드는 Comfort(Chill) 또는 차량 설정.
 
 ### 9) 도어 핸들 매크로
-- 외부 앞문 핸들(0x102/0x103 `frontHandlePulled` 10|1), 운전석·조수석 다중 선택. N초(기본 2초) 당기면 동작 1회 실행. 기본 동작은 프렁크 열기(0x273 `UI_frunkRequest` 5|1, P단·2 km/h 이하만).
+- 외부 앞문 핸들(0x102/0x103 `frontHandlePulled` 10|1), 운전석·조수석 다중 선택. **차량 잠금 해제(0x339 `simpleLockStatus` 54|2 = UNLOCKED, 해당 앞문 lockStatus 19/21 = UNLOCKED) + 그 문 열림** 상태에서 N초(기본 2초) 계속 당기면 동작 1회 실행. 잠금 정보가 없으면 동작하지 않음. 기본 동작은 프렁크 열기(0x273 `UI_frunkRequest` 5|1, P단·2 km/h 이하만).
 
 ### 10) Listen-Only 모드
 - Settings → System 토글. 기존 USB 로거의 하드웨어 listen-only(송신·ACK 없음, NVS `usblog/passive` 저장). Body Comfort는 수신을 계속해 매크로 "Toggle Listen-Only"로 다시 끌 수 있습니다.
@@ -96,6 +96,7 @@
 | 0x3A1 | VCFRONT_vehicleStatus (mux0) | 2Row*Unbuckled | **TX** 2열 벨트 알람 |
 | 0x3B3 | UI_vehicleControl2 | UI_lightSwitch | **TX** 라이트 ON |
 | 0x3C2 | VCLEFT_switchStatus | mux0 hazardButtonPressed·창문 스위치 / mux1 휠 버튼·음성인식 버튼·카메라 버튼 | 매크로 입력, **TX** 비상등/카메라 버튼 |
+| 0x339 | VCSEC_authentication | simpleLockStatus, left/rightFrontLockStatus | 도어 핸들 매크로 잠금 조건 |
 | 0x3F5 | VCFRONT_lighting | hazardLightRequest, indicatorLeftRequest | 비상등 상태 확인/점멸 카운트 |
 
 ## API
@@ -110,9 +111,9 @@
 
 - 통과: `tests/test_body_comfort_pure.cpp`(디코더, 제스처, 비상등 소유권, 창문 복구 계획, 시트벨트 체크섬, 설정 blob), `tests/test_body_comfort_runtime_host.cpp`(실제 런타임 헤더를 스텁으로 컴파일 후 가상 Juniper Body CAN 트래픽으로 10개 시나리오), `tests/test_wifi_ap_timing_host.py`(실제 web_api.h Wi-Fi 섹션 컴파일), `tests/test_dashboard_body_comfort.js`(Playwright: 소스/임베디드/중국어 대시보드).
 - ESP32-S3 컴파일/링크 통과 (2026-11-21, Arduino CLI 1.5.1, ESP32 core 3.3.12, autowp-mcp2515 1.3.1, `Compile-T2CAN-Variants.ps1`과 같은 보드 옵션):
-  - EN: 프로그램 1,605,021 / 3,145,728 B (51%), 정적 RAM 94,252 / 327,680 B (28%).
-  - zh-CN: 프로그램 1,608,717 B (51%), 정적 RAM 94,252 B. 임베디드 대시보드 gzip: EN 94.1 KB, zh-CN 97.8 KB (한도 100 KB).
-  - 기준 커밋 `7463e08` 대비: 플래시 +30.6 KB, RAM +792 B. `--warnings all`에서 새 코드 경고 0건.
+  - EN: 프로그램 1,605,453 / 3,145,728 B (51%), 정적 RAM 94,276 / 327,680 B (28%).
+  - zh-CN: 프로그램 1,609,165 B (51%), 정적 RAM 94,276 B. 임베디드 대시보드 gzip: EN 94.2 KB, zh-CN 97.9 KB (한도 100 KB).
+  - 기준 커밋 `7463e08` 대비: 플래시 +31.0 KB, RAM +816 B. `--warnings all`에서 새 코드 경고 0건.
   - 실제 보드에 플래시/부팅해 보지는 않았습니다.
 - 실차 미검증 가정(실차 로그로 확인 필요):
   - `UI_vehicleControl3`(0x294) 창문 요청을 VC가 UI 이외 노드의 프레임으로도 수행하는지, `UI_windowPercentageRequest`가 "열림 %"인지.

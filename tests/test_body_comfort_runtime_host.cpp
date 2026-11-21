@@ -213,6 +213,8 @@ struct Car {
   uint8_t pedalRaw = 0;     // 0.4 % steps
   uint8_t brake = 0;        // 0 OFF 1 ON
   bool handle[2] = {false, false};
+  uint8_t lockSimple = 1;          // 1 UNLOCKED, 2 LOCKED, 0 = frame absent
+  bool frontLocked[2] = {false, false};
   int32_t kph10 = 0;
   uint8_t latch[4] = {2, 2, 2, 2};      // CLOSED
   uint8_t mirror[2] = {2, 2};           // UNFOLDED
@@ -258,6 +260,13 @@ static void sendFrames() {
     rx(side == 0 ? 0x2C2 : 0x2C3, d);
   }
   memset(d, 0, 8); d[0] = (uint8_t)((car.rainy ? 1 : 0) | (car.snowy ? 2 : 0)); rx(0x25C, d);
+  if (car.lockSimple) {
+    memset(d, 0, 8);
+    bcSetBitsPure(d, 54, 2, car.lockSimple);
+    bcSetBitsPure(d, 19, 1, car.frontLocked[0] ? 1u : 0u);
+    bcSetBitsPure(d, 21, 1, car.frontLocked[1] ? 1u : 0u);
+    rx(0x339, d);
+  }
   memset(d, 0, 8); bcSetBitsPure(d, 41, 1, car.camera ? 1 : 0); rx(0x353, d);
   memset(d, 0, 8); bcSetBitsPure(d, 4, 4, car.hazard); bcSetBitsPure(d, 0, 2, car.indicator ? 1 : 0); rx(0x3F5, d);
   // 0x3C2 mux0 and mux1 (all buttons OFF=1 unless pressed).
@@ -881,14 +890,20 @@ static void testDoorHandleFrunk() {
   c.dhHoldS = 2;
   setCfg(c);
   run(500);
+  // Pull, door opens (latch OPENED), keep holding for `ms`, then release and close.
+  auto pullOpen = [](uint8_t side, uint32_t ms) {
+    const uint8_t door = side == 0 ? BC_DOOR_FL : BC_DOOR_FR;
+    car.handle[side] = true; car.latch[door] = 1; run(ms);
+    car.handle[side] = false; run(300); car.latch[door] = 2; run(300);
+  };
   // Short pull (normal door opening): nothing.
-  car.handle[0] = true; run(800); car.handle[0] = false; run(500);
+  pullOpen(0, 800);
   assert(takeTx(0x273).empty());
   // Passenger not selected.
-  car.handle[1] = true; run(3000); car.handle[1] = false; run(300);
+  pullOpen(1, 3000);
   assert(takeTx(0x273).empty());
-  // Driver hold >= 2 s opens the frunk once.
-  car.handle[0] = true; run(1800);
+  // Unlocked + open + held >= 2 s: frunk opens once.
+  car.handle[0] = true; car.latch[BC_DOOR_FL] = 1; run(1800);
   assert(takeTx(0x273).empty());
   run(600);
   auto f = takeTx(0x273);
@@ -897,29 +912,58 @@ static void testDoorHandleFrunk() {
   g_tx.clear();
   run(3000);  // still held: no repeat
   assert(takeTx(0x273).empty());
-  car.handle[0] = false; run(300);
+  car.handle[0] = false; run(300); car.latch[BC_DOOR_FL] = 2; run(300);
   assert(bcState.frunkOpens == 1);
+  // Door closed (handle pulled but latch stays CLOSED): never fires.
+  car.handle[0] = true; run(4000); car.handle[0] = false; run(300);
+  assert(takeTx(0x273).empty() && bcState.handleBlockedClosed == 1);
+  // Car locked: never fires, even with the latch reported open.
+  car.lockSimple = 2; car.frontLocked[0] = true;
+  pullOpen(0, 4000);
+  assert(takeTx(0x273).empty() && bcState.handleBlockedLocked == 1);
+  // Overall unlocked but the driver door still locked (selective unlock): blocked.
+  car.lockSimple = 1;
+  pullOpen(0, 4000);
+  assert(takeTx(0x273).empty());
+  car.frontLocked[0] = false;
+  // No lock data (0x339 absent): fail closed.
+  car.lockSimple = 0;
+  run(3500);
+  pullOpen(0, 4000);
+  assert(takeTx(0x273).empty());
+  // Pull while locked: nothing; car unlocks and door opens mid-pull, hold time
+  // starts then and the frunk opens 2 s later.
+  car.lockSimple = 2; car.frontLocked[0] = true;
+  run(500);
+  car.handle[0] = true; run(1500);
+  car.lockSimple = 1; car.frontLocked[0] = false; car.latch[BC_DOOR_FL] = 1;
+  run(1800);
+  assert(takeTx(0x273).empty());
+  run(500);
+  assert(!takeTx(0x273).empty());
+  car.handle[0] = false; run(300); car.latch[BC_DOOR_FL] = 2; run(300);
   // Both doors selected: passenger works too.
   bcCfg.dhDoorMask = 0x03u;
-  car.handle[1] = true; run(2500); car.handle[1] = false; run(300);
+  pullOpen(1, 2500);
   assert(!takeTx(0x273).empty());
   // Not in P: refused, nothing sent.
   g_tx.clear();
   car.gear = BC_GEAR_D;
-  car.handle[0] = true; run(2500); car.handle[0] = false; run(300);
+  pullOpen(0, 2500);
   assert(takeTx(0x273).empty() && std::string(bcState.lastMacroResult) == "frunk only opens in P");
   car.gear = BC_GEAR_P;
-  // Door-handle action can be any macro action, e.g. hazard blink.
+  // Door-handle action can be any macro action.
   bcCfg.dhAction = BC_ACTION_TOGGLE_REVERSE_HAZARD;
-  car.handle[0] = true; run(2500); car.handle[0] = false; run(300);
+  pullOpen(0, 2500);
   assert(bcCfg.rvHazard);
-  // Wheel macro can open the frunk as well; HTTP rejects the retired action.
   server.args = {{"dhAction", "4"}};
   httpBodyComfortUpdate();
   assert(server.lastCode == 400);
   server.args = {{"id", "20"}};
   httpBodyComfortAction();
   assert(server.lastCode == 200);
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("\"lock\":\"UNLOCKED\"") != std::string::npos);
 }
 
 static void testListenOnly() {

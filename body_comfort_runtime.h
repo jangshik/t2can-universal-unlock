@@ -111,6 +111,9 @@ struct BcStateRuntime {
   uint16_t pedalPct10; uint32_t pedalMs; bool pedalValid;
   bool brakeOn; uint32_t brakeMs; bool brakeValid;
   bool handlePulled[2];             // 0 driver (0x102), 1 passenger (0x103)
+  BcLockFramePure lock; uint32_t lockMs; bool lockValid;
+  uint32_t handleBlockedLocked, handleBlockedClosed;
+  bool handleBlockNoted[2];
 
   // Kickdown.
   BcKickdownPure kickdown;
@@ -466,6 +469,14 @@ static void bodyComfortObserve(uint8_t bus, uint16_t id, const uint8_t *d, uint8
       portENTER_CRITICAL(&bcMux);
       bcState.hazardReq = hazard; bcState.indicatorOn = indicator;
       bcState.lightingMs = now; bcState.lightingValid = true;
+      portEXIT_CRITICAL(&bcMux);
+      break;
+    }
+    case BC_ID_VCSEC_AUTH: {
+      BcLockFramePure lock = {};
+      if (!bcDecodeLockPure(d, dlc, lock)) break;
+      portENTER_CRITICAL(&bcMux);
+      bcState.lock = lock; bcState.lockMs = now; bcState.lockValid = true;
       portEXIT_CRITICAL(&bcMux);
       break;
     }
@@ -971,16 +982,33 @@ static void bcMacroServiceLocked(uint32_t now, uint8_t *actions, uint8_t &action
 }
 
 // Door-handle macro: holding an enabled exterior handle for dhHoldS runs
-// dhAction once per pull. Reported as buttons 8 (driver) / 9 (passenger).
+// dhAction once per pull. The hold time counts only while the car and that
+// door are unlocked and the door is open (fresh 0x339 lock state, fail-closed).
+// Reported as buttons 8 (driver) / 9 (passenger).
 static constexpr uint8_t BC_HANDLE_BUTTON_BASE = 8u;
 
 static void bcHandleServiceLocked(uint32_t now, uint8_t *actions, uint8_t &actionCount) {
+  const bool lockFresh = bcAgeFreshPure(now, bcState.lockMs, bcState.lockValid, BC_LOCK_FRESH_MS);
   for (uint8_t side = 0; side < 2u; ++side) {
     const bool fresh = bcAgeFreshPure(now, bcState.doorMs[side], bcState.doorValid[side], BC_DOOR_FRESH_MS);
     const bool armed = bcCfg.dhEnabled && ((bcCfg.dhDoorMask >> side) & 1u) != 0u;
     if (!armed || !fresh || !bcState.handlePulled[side]) {
       bcState.handleTiming[side] = false;
       bcState.handleFired[side] = false;
+      bcState.handleBlockNoted[side] = false;
+      continue;
+    }
+    const uint8_t frontDoor = bcState.door[side == 0u ? BC_DOOR_FL : BC_DOOR_FR];
+    if (!bcHandleMacroAllowedPure(lockFresh, bcState.lock, side, frontDoor)) {
+      // Still pulled, but locked / no lock data / door not open: wait.
+      if (!bcState.handleFired[side] && !bcState.handleBlockNoted[side]) {
+        bcState.handleBlockNoted[side] = true;
+        if (!lockFresh || bcState.lock.simple != 1u || bcState.lock.frontLocked[side])
+          bcState.handleBlockedLocked++;
+        else
+          bcState.handleBlockedClosed++;
+      }
+      bcState.handleTiming[side] = false;
       continue;
     }
     if (!bcState.handleTiming[side]) {
@@ -1252,8 +1280,10 @@ static String bodyComfortJson() {
                         : s.kickdown.kicked ? "KICKED" : "ARMED");
   const bool lFresh = bcAgeFreshPure(now, s.doorMs[0], s.doorValid[0], BC_DOOR_FRESH_MS);
   const bool rFresh = bcAgeFreshPure(now, s.doorMs[1], s.doorValid[1], BC_DOOR_FRESH_MS);
+  const bool lockFresh = bcAgeFreshPure(now, s.lockMs, s.lockValid, BC_LOCK_FRESH_MS);
   jw.string("handles", String("DRIVER:") + (!lFresh ? "?" : s.handlePulled[0] ? "PULLED" : "-") +
                        " PASSENGER:" + (!rFresh ? "?" : s.handlePulled[1] ? "PULLED" : "-"));
+  jw.string("lock", !lockFresh ? "?" : s.lock.simple == 1u ? "UNLOCKED" : "LOCKED");
   jw.boolean("listenOnly", canUsbPassive());
   jw.endObject();
 
@@ -1279,6 +1309,8 @@ static String bodyComfortJson() {
   jw.u32("kickdownReleases", s.kickdownReleases);
   jw.u32("kickdownRefused", s.kickdownRefused);
   jw.u32("frunkOpens", s.frunkOpens);
+  jw.u32("handleBlockedLocked", s.handleBlockedLocked);
+  jw.u32("handleBlockedClosed", s.handleBlockedClosed);
   jw.u32("frunkRefused", s.frunkRefused);
   jw.u32("macroEvents", s.macroEvents);
   jw.u32("macroDropped", s.macroDropped);

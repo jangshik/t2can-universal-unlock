@@ -44,6 +44,7 @@ static constexpr uint16_t BC_ID_VCFRONT_VEHICLE_STATUS = 0x3A1u;
 static constexpr uint16_t BC_ID_UI_VEHICLE_CONTROL2 = 0x3B3u;
 static constexpr uint16_t BC_ID_VCLEFT_SWITCH = 0x3C2u;
 static constexpr uint16_t BC_ID_VCFRONT_LIGHTING = 0x3F5u;
+static constexpr uint16_t BC_ID_VCSEC_AUTH = 0x339u;  // VCSEC_authentication (lock state)
 
 // ─── Timing constants ────────────────────────────────────────────────────
 static constexpr uint32_t BC_GEAR_FRESH_MS = 1500u;
@@ -54,6 +55,7 @@ static constexpr uint32_t BC_WEATHER_FRESH_MS = 5000u;
 static constexpr uint32_t BC_LIGHTING_FRESH_MS = 1500u;
 static constexpr uint32_t BC_UI_STATUS_FRESH_MS = 3000u;
 static constexpr uint32_t BC_SWITCH_STALE_MS = 600u;
+static constexpr uint32_t BC_LOCK_FRESH_MS = 3000u;
 // Same press shape the stalkless turn-signal path already uses on 0x3C2.
 static constexpr uint32_t BC_BUTTON_PRESS_MS = 300u;
 static constexpr uint32_t BC_BUTTON_RELEASE_MS = 200u;
@@ -271,6 +273,30 @@ static inline bool bcComposeWindowRequestPure(uint8_t *d, uint8_t doorMask,
 
 // ─── Gear / speed / weather / UI / lighting ─────────────────────────────
 enum BcGearPure : uint8_t { BC_GEAR_INVALID = 0, BC_GEAR_P = 1, BC_GEAR_R = 2, BC_GEAR_N = 3, BC_GEAR_D = 4 };
+
+// 0x339 VCSEC_authentication: simpleLockStatus (54|2: 0 SNA 1 UNLOCKED 2 LOCKED),
+// leftFrontLockStatus (19) / rightFrontLockStatus (21): 0 UNLOCKED 1 LOCKED.
+struct BcLockFramePure {
+  uint8_t simple;
+  bool frontLocked[2];  // 0 driver (left), 1 passenger (right)
+};
+
+static inline bool bcDecodeLockPure(const uint8_t *d, uint8_t dlc, BcLockFramePure &out) {
+  out = {};
+  if (d == nullptr || dlc < 7u) return false;
+  out.simple = (uint8_t)bcGetBitsPure(d, 54, 2);
+  out.frontLocked[0] = bcGetBitsPure(d, 19, 1) != 0u;
+  out.frontLocked[1] = bcGetBitsPure(d, 21, 1) != 0u;
+  return out.simple == 1u || out.simple == 2u;
+}
+
+// Door-handle macro gate: the car and that front door are unlocked and the door
+// is open. A pull on a locked door counts only once it has unlocked and opened.
+static inline bool bcHandleMacroAllowedPure(bool lockFresh, const BcLockFramePure &lock,
+                                            uint8_t side, uint8_t frontDoorState) {
+  return lockFresh && side < 2u && lock.simple == 1u && !lock.frontLocked[side] &&
+         frontDoorState == BC_DOOR_STATE_OPEN;
+}
 
 // DI_accelPedalPos (32|8, 0.4 %, 255 = SNA) in 0.1 %, DI_brakePedalState (19|2:
 // 0 OFF, 1 ON, 2 INVALID). Both live in DI_systemStatus 0x118 next to DI_gear.

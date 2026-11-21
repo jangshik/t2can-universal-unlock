@@ -38,7 +38,8 @@ SIM_HTML = r"""
   <h4>문 (탭하면 열기/닫기)</h4>
   <div class="row" id="bcSimDoors"></div>
   <h4>외부 도어 핸들 (누르고 있는 동안 당김)</h4>
-  <div class="row"><button id="bcSimH0" type="button">운전석 핸들</button><button id="bcSimH1" type="button">조수석 핸들</button></div>
+  <div class="row"><button id="bcSimH0" type="button">운전석 핸들</button><button id="bcSimH1" type="button">조수석 핸들</button><button id="bcSimLock" type="button">차량 잠금</button></div>
+  <div class="note">잠금 해제 상태에서 핸들을 당기면 그 문이 열립니다(실차와 동일). 잠긴 상태에서는 문이 열리지 않아 매크로도 동작하지 않습니다.</div>
   <h4>날씨</h4>
   <div class="row"><button id="bcSimRain" type="button">비</button><button id="bcSimSnow" type="button">눈</button></div>
   <h4>2열 승객 탑승 · 벨트 미착용</h4>
@@ -69,8 +70,9 @@ SIM_JS = r"""
   $('bcSimDoors').innerHTML=DOORS.map(([k,n],i)=>`<button type="button" data-door="${i}">${n}</button>`).join('');
   $('bcSimDoors').querySelectorAll('button').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.door);car.door[i]=!car.door[i];P.log(`Door ${DOORS[i][0]} ${car.door[i]?'opened':'closed'}`);car.door[i]?P.doorOpened(i):P.doorClosed(i)});
   $('bcSimPedal').oninput=e=>{car.pedal=Number(e.target.value)};
+  $('bcSimLock').onclick=()=>{car.locked=!car.locked;P.log('Car '+(car.locked?'locked':'unlocked'))};
   $('bcSimBrake').onclick=()=>{car.brake=!car.brake;P.log('Brake '+(car.brake?'ON':'OFF'))};
-  [0,1].forEach(i=>{const b=$('bcSimH'+i);const on=e=>{e.preventDefault();car.handle[i]=true;P.log((i?'Passenger':'Driver')+' handle pulled')};const off=()=>{if(car.handle[i]){car.handle[i]=false;P.log((i?'Passenger':'Driver')+' handle released')}};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);b.addEventListener('pointercancel',off)});
+  [0,1].forEach(i=>{const b=$('bcSimH'+i);const on=e=>{e.preventDefault();car.handle[i]=true;P.log((i?'Passenger':'Driver')+' handle pulled'+(car.locked?' (locked)':''));if(!car.locked&&!car.door[i]){car.door[i]=true;P.log(`Door ${i?'FR':'FL'} opened`);P.doorOpened(i)}};const off=()=>{if(car.handle[i]){car.handle[i]=false;P.log((i?'Passenger':'Driver')+' handle released')}};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);b.addEventListener('pointercancel',off)});
   $('bcSimRain').onclick=()=>{car.rain=!car.rain;P.log('Rain '+(car.rain?'ON':'OFF'))};
   $('bcSimSnow').onclick=()=>{car.snow=!car.snow;P.log('Snow '+(car.snow?'ON':'OFF'))};
   $('bcSimBelts').innerHTML=['좌','중','우'].map((n,i)=>`<button type="button" data-seat="${i}">${n}</button>`).join('');
@@ -84,7 +86,7 @@ SIM_JS = r"""
     $('bcSimDoors').querySelectorAll('button').forEach(b=>b.classList.toggle('on',car.door[Number(b.dataset.door)]));
     $('bcSimBelts').querySelectorAll('button').forEach(b=>b.classList.toggle('on',car.belts[Number(b.dataset.seat)]));
     $('bcSimPedal').value=String(car.pedal);$('bcSimPedalV').textContent=car.pedal+' %';$('bcSimBrake').classList.toggle('on',car.brake);
-    [0,1].forEach(i=>$('bcSimH'+i).classList.toggle('on',car.handle[i]));
+    [0,1].forEach(i=>$('bcSimH'+i).classList.toggle('on',car.handle[i]));$('bcSimLock').classList.toggle('on',car.locked);$('bcSimLock').textContent=car.locked?'잠김 (탭: 해제)':'차량 잠금';
     $('bcSimRain').classList.toggle('on',car.rain);$('bcSimSnow').classList.toggle('on',car.snow);
     const chime=car.belts.map((u,i)=>u&&!(P.cfg.sbEnabled&&((P.cfg.sbSeatMask>>i)&1))).some(Boolean);
     $('bcSimState').textContent=`창문 ${DOORS.map(([k],i)=>k+' '+car.win[i]+'%').join(' · ')} | 미러 ${car.mirrors} | 카메라 ${car.camera?'ON':'OFF'} | 비상등 ${car.hazard}${P.st.rearLight?' | 후미등 ON':''} | 벨트 알람 ${chime?'울림':'없음'} | 가속 모드 ${car.pedalMode} | 프렁크 ${car.frunk?'열림':'닫힘'}${car.listenOnly?' | LISTEN-ONLY':''}`;

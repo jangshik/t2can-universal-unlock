@@ -11,7 +11,7 @@
   const DOORS=['FL','FR','RL','RR'];
   const legacy={};
   let lastMacro={button:0,gesture:0,action:0,result:''};
-  const car={gear:'P',kph:0,door:[false,false,false,false],win:[0,0,0,0],rain:false,snow:false,mirrors:'UNFOLDED',camera:false,hazard:'OFF',belts:[false,false,false],pedal:0,brake:false,handle:[false,false],frunk:false,pedalMode:'Comfort (Chill)',listenOnly:false,log:[]};
+  const car={gear:'P',kph:0,door:[false,false,false,false],win:[0,0,0,0],rain:false,snow:false,mirrors:'UNFOLDED',camera:false,hazard:'OFF',belts:[false,false,false],pedal:0,brake:false,handle:[false,false],frunk:false,pedalMode:'Comfort (Chill)',listenOnly:false,locked:false,log:[]};
   const st={entry:['IDLE','IDLE','IDLE','IDLE'],saved:[0,0,0,0],foldedByUs:false,cameraByUs:false,unfoldSince:0,hazardOwned:false,userHazard:false,blinkUntil:0,doorHazUntil:0,doorHazActive:false,rearLight:false};
   const stats={txOk:0,txFail:0,entryOpens:0,entryRestores:0,entryBlockedWeather:0,entryBlockedGear:0,seatbeltInjected:0,macroEvents:0,hazardPresses:0,blinkRuns:0,mirrorFolds:0,mirrorUnfolds:0,cameraPresses:0};
   const log=msg=>{car.log.unshift(new Date().toLocaleTimeString()+'  '+msg);car.log.length=Math.min(car.log.length,12);window.__bcPreviewRender?.()};
@@ -54,6 +54,8 @@
   function handleTick(now){
     for(let i=0;i<2;i++){const h=hd[i];
       if(!cfg.dhEnabled||!((cfg.dhDoorMask>>i)&1)||!car.handle[i]){h.since=0;h.fired=false;continue}
+      // Same gate as the firmware: unlocked and that front door open.
+      if(car.locked||!car.door[i]){h.since=0;continue}
       if(!h.since)h.since=now;
       if(!h.fired&&now-h.since>=cfg.dhHoldS*1000){h.fired=true;stats.macroEvents++;lastMacro={button:8+i,gesture:2,action:cfg.dhAction,result:'OK'};const r=runAction(cfg.dhAction);lastMacro.result=r||'OK';if(r)log('Door handle: '+r)}
     }
@@ -94,7 +96,7 @@
         windows:DOORS.map((d,i)=>`${d}:${posName(car.win[i])}(${car.win[i]}%)`).join(' '),
         easyEntry:DOORS.map((d,i)=>d+':'+st.entry[i]).join(' '),
         mirrors:`L:${car.mirrors} R:${car.mirrors}`,mirrorFoldedByFeature:st.foldedByUs,camera:car.camera?'ON':'OFF',
-        hazard:car.hazard,hazardOwned:st.hazardOwned,pedalPct:car.pedal,brake:car.brake?'ON':'OFF',kickdown:!cfg.kdEnabled?'OFF':kd.kicked?'KICKED':'ARMED',handles:`DRIVER:${car.handle[0]?'PULLED':'-'} PASSENGER:${car.handle[1]?'PULLED':'-'}`,listenOnly:car.listenOnly,blinkActive:Date.now()<st.blinkUntil,reverseHazard:cfg.rvHazard&&car.gear==='R',doorHazard:st.doorHazActive,rearLight:st.rearLight},
+        hazard:car.hazard,hazardOwned:st.hazardOwned,pedalPct:car.pedal,brake:car.brake?'ON':'OFF',kickdown:!cfg.kdEnabled?'OFF':kd.kicked?'KICKED':'ARMED',handles:`DRIVER:${car.handle[0]?'PULLED':'-'} PASSENGER:${car.handle[1]?'PULLED':'-'}`,lock:car.locked?'LOCKED':'UNLOCKED',listenOnly:car.listenOnly,blinkActive:Date.now()<st.blinkUntil,reverseHazard:cfg.rvHazard&&car.gear==='R',doorHazard:st.doorHazActive,rearLight:st.rearLight},
       stats:{...stats,lastMacroButton:lastMacro.button,lastMacroGesture:lastMacro.gesture,lastMacroAction:lastMacro.action,lastMacroResult:lastMacro.result}};
   }
   window.__bcPreview={car,cfg,st,stats,wifi,doorOpened,doorClosed,runAction,log,
