@@ -568,6 +568,27 @@ static void testReverseHazardAndLight() {
   run(1000);
   assert(g_tx.empty());
 
+  // R -> P with an unlock flash in between: hazards still turned off.
+  car.gear = BC_GEAR_R;
+  run(400);
+  assert(!takeTx(0x3C2).empty());
+  car.hazard = BC_HAZARD_REQ_BUTTON;
+  run(1500);
+  assert(bcState.hazardCtl.ownedOn);
+  g_tx.clear();
+  car.gear = BC_GEAR_P;
+  car.hazard = 3;  // UNLOCK flash
+  run(800);
+  assert(takeTx(0x3C2).empty() && bcState.hazardCtl.ownedOn);
+  car.hazard = BC_HAZARD_REQ_BUTTON;
+  run(400);
+  auto off = takeTx(0x3C2);
+  assert(!off.empty() && bcHazardButtonPressedPure(off[0].data));
+  car.hazard = 0;
+  run(1500);
+  assert(!bcState.hazardCtl.ownedOn);
+  g_tx.clear();
+
   // Fog-only mode never touches 0x3B3; hazards on by the driver are left alone.
   resetAll();
   c.rvLightMode = BC_REAR_LIGHT_FOG;

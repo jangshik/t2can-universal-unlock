@@ -590,7 +590,13 @@ struct BcHazardCtlPure {
   bool lastDesired;
   uint8_t attempts;
   uint32_t pressMs;
+  uint8_t offRounds;        // OFF retry rounds used after attempts ran out
+  bool offCooldown;
+  uint32_t offRetryAtMs;
 };
+
+static constexpr uint32_t BC_HAZARD_OFF_RETRY_MS = 5000u;
+static constexpr uint8_t BC_HAZARD_OFF_MAX_ROUNDS = 3u;
 
 enum BcHazardActionPure : uint8_t { BC_HAZARD_ACTION_NONE = 0, BC_HAZARD_ACTION_PRESS = 1 };
 
@@ -599,6 +605,8 @@ static inline uint8_t bcHazardStepPure(BcHazardCtlPure &c, uint32_t now, bool ob
   if (desired != c.lastDesired) {
     c.lastDesired = desired;
     c.attempts = 0u;
+    c.offRounds = 0u;
+    c.offCooldown = false;
     if (!desired) c.userOverride = false;
   }
   if (c.pressPending) {
@@ -612,8 +620,11 @@ static inline uint8_t bcHazardStepPure(BcHazardCtlPure &c, uint32_t now, bool ob
   if (!obsValid) return BC_HAZARD_ACTION_NONE;
   const bool on = obsReq == BC_HAZARD_REQ_BUTTON;
   const bool off = obsReq == BC_HAZARD_REQ_NONE;
-  if (c.ownedOn && !on) {
-    // Cancelled without our press (driver button, lock flash takeover, ...).
+  // Another source (lock/unlock flash on shifting to P, crash, alarm, DAS) is
+  // temporarily driving the lamps: keep ownership and wait for it to finish.
+  if (!on && !off) return BC_HAZARD_ACTION_NONE;
+  if (c.ownedOn && off) {
+    // Turned off without our press (driver button): never fight the driver.
     c.ownedOn = false;
     if (desired) c.userOverride = true;
   }
@@ -627,7 +638,19 @@ static inline uint8_t bcHazardStepPure(BcHazardCtlPure &c, uint32_t now, bool ob
     return BC_HAZARD_ACTION_PRESS;
   }
   if (c.ownedOn && on) {
-    if (c.attempts >= BC_HAZARD_MAX_ATTEMPTS) return BC_HAZARD_ACTION_NONE;
+    if (c.attempts >= BC_HAZARD_MAX_ATTEMPTS) {
+      // Our hazards are still on: retry the OFF press a few more rounds.
+      if (c.offRounds >= BC_HAZARD_OFF_MAX_ROUNDS) return BC_HAZARD_ACTION_NONE;
+      if (!c.offCooldown) {
+        c.offCooldown = true;
+        c.offRetryAtMs = now + BC_HAZARD_OFF_RETRY_MS;
+        return BC_HAZARD_ACTION_NONE;
+      }
+      if ((int32_t)(now - c.offRetryAtMs) < 0) return BC_HAZARD_ACTION_NONE;
+      c.offCooldown = false;
+      c.offRounds++;
+      c.attempts = 0u;
+    }
     c.attempts++;
     c.pressPending = true;
     c.pressIntentOn = false;

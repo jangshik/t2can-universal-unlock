@@ -304,6 +304,29 @@ static void testHazardController() {
   assert(bcHazardStepPure(e, t += 100, true, 0, false) == BC_HAZARD_ACTION_NONE);
   assert(bcHazardStepPure(e, t += 100, true, 0, true) == BC_HAZARD_ACTION_PRESS);
 
+  // Field report: R -> P with "unlock on Park" flashes UNLOCK (3) while our
+  // hazards are on. Ownership must survive, and they must be turned off after.
+  BcHazardCtlPure u = {};
+  t = 0;
+  assert(bcHazardStepPure(u, t, true, 0, true) == BC_HAZARD_ACTION_PRESS);
+  assert(bcHazardStepPure(u, t += 1300, true, 1, true) == BC_HAZARD_ACTION_NONE && u.ownedOn);
+  assert(bcHazardStepPure(u, t += 100, true, 3, false) == BC_HAZARD_ACTION_NONE);  // unlock flash
+  assert(u.ownedOn && !u.userOverride);
+  assert(bcHazardStepPure(u, t += 600, true, 3, false) == BC_HAZARD_ACTION_NONE);
+  assert(bcHazardStepPure(u, t += 100, true, 1, false) == BC_HAZARD_ACTION_PRESS); // back to BUTTON: off
+  assert(bcHazardStepPure(u, t += 1300, true, 0, false) == BC_HAZARD_ACTION_NONE && !u.ownedOn);
+  // OFF presses that do not take effect are retried in rounds after 5 s.
+  BcHazardCtlPure o = {};
+  t = 0;
+  bcHazardStepPure(o, t, true, 0, true);
+  bcHazardStepPure(o, t += 1300, true, 1, true);
+  int offPresses = 0;
+  for (int i = 0; i < 200; ++i, t += 200)
+    offPresses += bcHazardStepPure(o, t, true, 1, false) == BC_HAZARD_ACTION_PRESS;
+  assert(offPresses == BC_HAZARD_MAX_ATTEMPTS * (1 + BC_HAZARD_OFF_MAX_ROUNDS));
+  // A new request episode resets the rounds.
+  bcHazardStepPure(o, t += 100, true, 1, true);
+  assert(bcHazardStepPure(o, t += 100, true, 1, false) == BC_HAZARD_ACTION_PRESS);
   // Lock flash (another source) blocks the press until NONE.
   BcHazardCtlPure f = {};
   assert(bcHazardStepPure(f, 0, true, 2, true) == BC_HAZARD_ACTION_NONE);
