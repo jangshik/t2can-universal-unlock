@@ -161,7 +161,7 @@ static BodyComfortConfigPure bcCfg = bodyComfortDefaultsPure();   // bcMux
 static BcStateRuntime bcState = {};                                // bcMux
 static bool bcCfgDirty = false;                                    // bcMux
 static uint32_t bcCfgDirtyMs = 0;                                  // bcMux
-static volatile uint32_t bcCfgSaveFailures = 0;
+static uint32_t bcCfgSaveFailures = 0;                            // bcMux
 static TaskHandle_t bodyComfortTaskHandle = nullptr;
 
 static BodyComfortConfigPure bodyComfortCfgSnapshot() {
@@ -859,7 +859,11 @@ static void bodyComfortServiceTick(uint32_t now) {
     save = true;
   }
   portEXIT_CRITICAL(&bcMux);
-  if (save && !bodyComfortCfgPersist(toSave)) bcCfgSaveFailures++;
+  if (save && !bodyComfortCfgPersist(toSave)) {
+    portENTER_CRITICAL(&bcMux);
+    bcCfgSaveFailures++;
+    portEXIT_CRITICAL(&bcMux);
+  }
 }
 
 static void bodyComfortTask(void *) {
@@ -920,6 +924,7 @@ static String bodyComfortJson() {
   portENTER_CRITICAL(&bcMux);
   const BodyComfortConfigPure c = bcCfg;
   const BcStateRuntime s = bcState;
+  const uint32_t saveFailures = bcCfgSaveFailures;
   portEXIT_CRITICAL(&bcMux);
 
   String j;
@@ -1036,7 +1041,7 @@ static String bodyComfortJson() {
   jw.u32("lastMacroGesture", s.lastMacroGesture);
   jw.u32("lastMacroAction", s.lastMacroAction);
   jw.u32("lastMacroAgeMs", s.macroEvents ? (uint32_t)(now - s.lastMacroMs) : 0u);
-  jw.u32("saveFailures", bcCfgSaveFailures);
+  jw.u32("saveFailures", saveFailures);
   jw.endObject();
   jw.finish();
   return j;
