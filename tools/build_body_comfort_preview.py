@@ -102,6 +102,13 @@ def main() -> None:
         raise SystemExit("v38_preview_mock.js changed; update the Juniper default")
     base_mock = base_mock.replace(default_model, default_model[:-2] + "2;")  # Juniper, Body + Chassis
     body_mock = (ROOT / "tools" / "body_comfort_preview_mock.js").read_text(encoding="utf-8")
+    # Resolve API paths against a fixed origin so the preview works from
+    # file://, about:blank or any hosting page.
+    for name in ("base_mock", "body_mock"):
+        text = locals()[name]
+        assert "location.href" in text, name
+    base_mock = base_mock.replace("new URL(raw,location.href)", "new URL(raw,'http://t2can.local/')")
+    body_mock = body_mock.replace("location.href)", "'http://t2can.local/')")
     html = html.replace("<title>", "<title>Body Comfort Preview · ", 1) if "<title>" in html else html
     html = html.replace("</head>",
                         "<style id=\"bc-preview-style\">" + SIM_CSS + "</style>\n"

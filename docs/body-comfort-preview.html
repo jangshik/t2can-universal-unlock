@@ -650,7 +650,7 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
   };
   window.fetch=async(input,init={})=>{
     const raw=typeof input==='string'?input:input.url;
-    const u=new URL(raw,location.href);
+    const u=new URL(raw,'http://t2can.local/');
     if(u.pathname==='/api/profile/status')return send(profile);
     if(u.pathname==='/api/features/status')return send(features);
     if(u.pathname==='/api/wifi/status')return send({ok:true,ssid:'T2CAN-DEMO',ip:'192.168.4.1',passwordIsDefault:false});
@@ -786,7 +786,7 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
     macro(button,gesture){stats.macroEvents++;if(!cfg.mcEnabled){log('Macro ignored (macros OFF)');return}const a=cfg.mcAction[button][gesture];if(!a){log('Macro slot empty');return}const r=runAction(a);if(r)log('Macro rejected: '+r)},
     userHazard(){if(car.hazard==='ON'){car.hazard='OFF';if(st.hazardOwned){st.hazardOwned=false;st.userHazard=true}}else{car.hazard='ON';st.hazardOwned=false}log('Driver pressed hazard button')}};
   window.fetch=async(input,init={})=>{
-    const u=new URL(typeof input==='string'?input:input.url,location.href);
+    const u=new URL(typeof input==='string'?input:input.url,'http://t2can.local/');
     if(u.pathname==='/api/body/config')return json(body());
     if(u.pathname==='/api/body/update'){
       let any=false;
