@@ -598,15 +598,29 @@ enum BcActionPure : uint8_t {
   BC_ACTION_TOGGLE_EASY_ENTRY,
   BC_ACTION_TOGGLE_MIRROR_FOLD_OPT,
   BC_ACTION_TOGGLE_SEATBELT,
-  BC_ACTION_TOGGLE_HAZARD_BLINK,
+  BC_ACTION_RETIRED_4,  // was "toggle hazard blink availability"; loads as NONE
   BC_ACTION_TOGGLE_REVERSE_HAZARD,
   BC_ACTION_TOGGLE_REVERSE_LIGHT,
   BC_ACTION_TOGGLE_DOOR_HAZARD,
   BC_ACTION_RUN_HAZARD_BLINK,
   BC_ACTION_MIRROR_FOLD_NOW,
   BC_ACTION_CAMERA,
+  // Existing (pre-add_feats) features, toggled through their own setters.
+  BC_ACTION_TOGGLE_NAG_KILLER,
+  BC_ACTION_TOGGLE_ISA_SUPPRESSION,
+  BC_ACTION_TOGGLE_DRIVER_MONITORING,
+  BC_ACTION_TOGGLE_AUTO_BLINKER,
+  BC_ACTION_TOGGLE_TLSSC,
+  BC_ACTION_TOGGLE_DOOR_CANCEL,
+  BC_ACTION_TOGGLE_VISION_CONTROL,
+  BC_ACTION_TOGGLE_CONTINUOUS_AP,
+  BC_ACTION_TOGGLE_BATTERY_PREHEAT,
   BC_ACTION_COUNT
 };
+
+static inline bool bcActionIsExistingFeaturePure(uint8_t action) {
+  return action >= BC_ACTION_TOGGLE_NAG_KILLER && action < BC_ACTION_COUNT;
+}
 
 enum BcRearLightModePure : uint8_t {
   BC_REAR_LIGHT_FOG = 0,
@@ -633,9 +647,9 @@ struct BodyComfortConfigPure {
   uint16_t mcLongMs;
   uint16_t mcGapMs;
   uint8_t mcAction[BC_BTN_COUNT][BC_GESTURE_COUNT];
-  // 4) Hazard blink
+  // 4) Hazard blink: one-shot, hazards on for hzBlinkSeconds then off
   bool hzBlinkEnabled;
-  uint8_t hzBlinkCount;
+  uint8_t hzBlinkSeconds;
   // 5) Reverse hazards
   bool rvHazard;
   // 6) Reverse rear light
@@ -657,7 +671,7 @@ static inline BodyComfortConfigPure bodyComfortDefaultsPure() {
   c.sbSeatMask = 0x07u;
   c.mcLongMs = 800u;
   c.mcGapMs = 400u;
-  c.hzBlinkCount = 3u;
+  c.hzBlinkSeconds = 3u;
   c.rvLightMode = BC_REAR_LIGHT_BOTH;
   c.drOffDelayMs = 2000u;
   return c;
@@ -676,8 +690,9 @@ static inline void bodyComfortSanitizePure(BodyComfortConfigPure &c) {
   c.mcGapMs = bcClampPure<uint16_t>(c.mcGapMs, 200u, 800u);
   for (uint8_t b = 0; b < BC_BTN_COUNT; ++b)
     for (uint8_t g = 0; g < BC_GESTURE_COUNT; ++g)
-      if (c.mcAction[b][g] >= BC_ACTION_COUNT) c.mcAction[b][g] = BC_ACTION_NONE;
-  c.hzBlinkCount = bcClampPure<uint8_t>(c.hzBlinkCount, 1u, 10u);
+      if (c.mcAction[b][g] >= BC_ACTION_COUNT || c.mcAction[b][g] == BC_ACTION_RETIRED_4)
+        c.mcAction[b][g] = BC_ACTION_NONE;
+  c.hzBlinkSeconds = bcClampPure<uint8_t>(c.hzBlinkSeconds, 1u, 30u);
   if (c.rvLightMode > BC_REAR_LIGHT_BOTH) c.rvLightMode = BC_REAR_LIGHT_BOTH;
   c.drOffDelayMs = bcClampPure<uint16_t>(c.drOffDelayMs, 0u, 10000u);
 }
@@ -685,7 +700,7 @@ static inline void bodyComfortSanitizePure(BodyComfortConfigPure &c) {
 // v1: 36 bytes, six wheel controls. v2: 42 bytes, adds voice + camera buttons.
 static constexpr uint8_t BC_CFG_BLOB_VERSION = 2u;
 static constexpr uint8_t BC_CFG_BLOB_LEN_V1 = 17u + BC_BTN_COUNT_V1 * BC_GESTURE_COUNT + 1u;
-static constexpr uint8_t BC_CFG_BLOB_LEN = 17u + BC_BTN_COUNT * BC_GESTURE_COUNT + 1u;
+static constexpr uint8_t BC_CFG_BLOB_LEN = 17u + (uint8_t)BC_BTN_COUNT * (uint8_t)BC_GESTURE_COUNT + 1u;
 static_assert(BC_CFG_BLOB_LEN_V1 == 36u && BC_CFG_BLOB_LEN == 42u, "config blob layout");
 
 static inline uint8_t bcCfgBlobChecksumLenPure(const uint8_t *b, uint8_t len) {
@@ -718,7 +733,7 @@ static inline void bodyComfortSerializePure(const BodyComfortConfigPure &c,
   out[10] = (uint8_t)(c.mcLongMs >> 8);
   out[11] = (uint8_t)(c.mcGapMs & 0xFFu);
   out[12] = (uint8_t)(c.mcGapMs >> 8);
-  out[13] = c.hzBlinkCount;
+  out[13] = c.hzBlinkSeconds;
   out[14] = c.rvLightMode;
   out[15] = (uint8_t)(c.drOffDelayMs & 0xFFu);
   out[16] = (uint8_t)(c.drOffDelayMs >> 8);
@@ -754,7 +769,7 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
   c.sbSeatMask = in[8];
   c.mcLongMs = (uint16_t)(in[9] | (in[10] << 8));
   c.mcGapMs = (uint16_t)(in[11] | (in[12] << 8));
-  c.hzBlinkCount = in[13];
+  c.hzBlinkSeconds = in[13];
   c.rvLightMode = in[14];
   c.drOffDelayMs = (uint16_t)(in[15] | (in[16] << 8));
   uint8_t i = 17u;
@@ -770,7 +785,6 @@ static inline bool bodyComfortApplyToggleActionPure(BodyComfortConfigPure &c, ui
     case BC_ACTION_TOGGLE_EASY_ENTRY: c.eeEnabled = !c.eeEnabled; return true;
     case BC_ACTION_TOGGLE_MIRROR_FOLD_OPT: c.eeMirrorFold = !c.eeMirrorFold; return true;
     case BC_ACTION_TOGGLE_SEATBELT: c.sbEnabled = !c.sbEnabled; return true;
-    case BC_ACTION_TOGGLE_HAZARD_BLINK: c.hzBlinkEnabled = !c.hzBlinkEnabled; return true;
     case BC_ACTION_TOGGLE_REVERSE_HAZARD: c.rvHazard = !c.rvHazard; return true;
     case BC_ACTION_TOGGLE_REVERSE_LIGHT: c.rvLight = !c.rvLight; return true;
     case BC_ACTION_TOGGLE_DOOR_HAZARD: c.drHazard = !c.drHazard; return true;

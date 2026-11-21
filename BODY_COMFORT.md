@@ -46,12 +46,18 @@
 ### 3) 핸들 버튼 매크로
 - 버튼(8개, 0x3C2 mux1): 음성인식 버튼(48|2), 카메라 버튼(50|2), 좌/우 스크롤 휠 누름, 좌/우 휠 좌·우 틸트.
 - 제스처: 더블 클릭, 트리플 클릭, 롱 클릭(기본 800 ms) → 24개 슬롯 각각에 동작 지정.
-- 동작: 각 기능 ON/OFF 토글(Easy Entry, 미러 접기 옵션, 시트벨트, 비상등 깜빡임, 후진 비상등, 후진 후미등, 문열림 비상등), 비상등 N회 점멸 실행, 미러 접기/펴기, 카메라 화면.
+- 동작: 새 기능 ON/OFF 토글(Easy Entry, 미러 접기 옵션, 시트벨트, 후진 비상등, 후진 후미등, 문열림 비상등), 비상등 N초 점멸 실행, 미러 접기/펴기, 카메라 화면.
+- **기존 기능 토글(동작 11–19)**: 11 Nag Killer, 12 ISA Suppression, 13 Disable Driver Monitoring, 14 Auto Blinker, 15 TLSSC, 16 Door Button Cancel, 17 Visual Speed Control, 18 Continuous AP, 19 Battery Preheating.
+  - 대시보드에서 해당 기능을 켜고 끌 때와 **같은 내부 함수**로 바꾸고 저장합니다. Nag Killer는 대시보드와 똑같이 TSL9 입력 정리 → CAN TX 일시 보류 → 저장 → 해제 순서로 처리합니다.
+  - 이 프로필에서 지원하지 않는 기능을 켜려고 하면 거부합니다(끄는 것은 항상 됩니다). Continuous AP는 대시보드에서 방식을 먼저 골라 두어야 켜집니다.
+  - 결과(OK 또는 거부 이유)는 대시보드 실시간 상태의 "Last macro"에 표시됩니다.
+- 대시보드의 매크로 목록은 버튼별로 **접힌 상태가 기본**입니다. 접힌 상태에서도 설정된 버튼은 개수 배지와 "더블 → Nag Killer 토글" 같은 요약을 보여 주고, 섹션 제목에 전체 설정 개수가 나옵니다. 탭하면 펼쳐서 수정할 수 있습니다.
 - 토글 결과는 1.5초 디바운스 후 NVS에 저장됩니다. 각 버튼의 순정 기능(음성인식 열기, 카메라 화면 등)은 누를 때마다 그대로 같이 실행됩니다(차단 불가).
 
-### 4) 비상깜빡이 N회(기본 3회) 점멸
-- 매크로 또는 대시보드 "Blink Now"로 실행. 이미 비상등이 켜져 있으면 실행하지 않습니다.
-- 비상등 버튼 누름(0x3C2 mux0 `hazardButtonPressed`, 기존 stalkless 방향지시 주입과 같은 300 ms 누름 형태)으로 켜고, `VCFRONT_lighting` 0x3F5의 방향지시 점등 횟수를 세어 N회 후 다시 눌러 끕니다.
+### 4) Hazard Blink (for N seconds, 기본 3초)
+- 일회성 명령: 매크로 또는 대시보드 "Blink Now"로 실행. 이미 비상등이 켜져 있으면 실행하지 않습니다.
+- 비상등 버튼 누름(0x3C2 mux0 `hazardButtonPressed`, 기존 stalkless 방향지시 주입과 같은 300 ms 누름 형태)으로 켜고, `VCFRONT_lighting` 0x3F5에서 켜진 것이 확인된 시점부터 N초 뒤 다시 눌러 끕니다.
+- 스위치는 명령 허용/차단만 합니다(켠다고 비상등이 켜지지 않음).
 
 ### 5) 후진 시 비상깜빡이 ON / 7) D·R에서 문 열리면 비상깜빡이 ON
 - 비상등 제어는 **소유권 컨트롤러**가 담당합니다: 실제 상태(0x3F5 `hazardLightRequest`)를 보고 다를 때만 누르고, 결과를 확인(1.2 s)하며, 최대 3회 재시도합니다.
@@ -85,8 +91,8 @@
 ## API
 
 - `GET /api/body/config` — 설정 + 실시간 상태(`live`) + 카운터(`stats`).
-- `POST /api/body/update?<key>=<value>...` — 부분 업데이트. 키: `eeEnabled, eeDoorMask(0-15), eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs(0-5000), eeMirrorFold, eeMirrorCamera, eeUnfoldKph(1-80), eeUnfoldHoldS(0-30), sbEnabled, sbSeatMask(0-7), mcEnabled, mcLongMs(500-2000), mcGapMs(200-800), mc=<button>,<gesture>,<action>, hzBlinkEnabled, hzBlinkCount(1-10), rvHazard, rvLight, rvLightMode(0 fog/1 lights/2 both), drHazard, drOffDelayMs(0-10000)`. 범위 밖 값은 400, 미지원 토폴로지는 409.
-- `POST /api/body/action?id=8|9|10` — 비상등 점멸 / 미러 접기·펴기 / 카메라.
+- `POST /api/body/update?<key>=<value>...` — 부분 업데이트. 키: `eeEnabled, eeDoorMask(0-15), eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs(0-5000), eeMirrorFold, eeMirrorCamera, eeUnfoldKph(1-80), eeUnfoldHoldS(0-30), sbEnabled, sbSeatMask(0-7), mcEnabled, mcLongMs(500-2000), mcGapMs(200-800), mc=<button>,<gesture>,<action>, hzBlinkEnabled, hzBlinkSeconds(1-30), rvHazard, rvLight, rvLightMode(0 fog/1 lights/2 both), drHazard, drOffDelayMs(0-10000)`. 범위 밖 값은 400, 미지원 토폴로지는 409.
+- `POST /api/body/action?id=8|9|10` — 비상등 점멸 / 미러 접기·펴기 / 카메라, `id=11…19` 기존 기능 토글.
 - `GET|POST /api/wifi/timing` — `slowStartEnabled, startDelayS(0-600), hideEnabled, hideDelayS(0-3600)`.
 - NVS: `bodycmf/cfg`(버전 2 + 체크섬 42바이트 blob, 이전 36바이트 v1도 읽음, 손상 시 기본값). Reset Feature Settings가 `bodycmf`를 지웁니다.
 
@@ -94,9 +100,9 @@
 
 - 통과: `tests/test_body_comfort_pure.cpp`(디코더, 제스처, 비상등 소유권, 창문 복구 계획, 시트벨트 체크섬, 설정 blob), `tests/test_body_comfort_runtime_host.cpp`(실제 런타임 헤더를 스텁으로 컴파일 후 가상 Juniper Body CAN 트래픽으로 10개 시나리오), `tests/test_wifi_ap_timing_host.py`(실제 web_api.h Wi-Fi 섹션 컴파일), `tests/test_dashboard_body_comfort.js`(Playwright: 소스/임베디드/중국어 대시보드).
 - ESP32-S3 컴파일/링크 통과 (2026-11-21, Arduino CLI 1.5.1, ESP32 core 3.3.12, autowp-mcp2515 1.3.1, `Compile-T2CAN-Variants.ps1`과 같은 보드 옵션):
-  - EN: 프로그램 1,597,113 / 3,145,728 B (50%), 정적 RAM 94,108 / 327,680 B (28%).
-  - zh-CN: 프로그램 1,600,729 B (50%), 정적 RAM 94,108 B.
-  - 기준 커밋 `7463e08` 대비: 플래시 +22.7 KB, RAM +648 B. `--warnings all`에서 새 코드 경고 0건.
+  - EN: 프로그램 1,600,009 / 3,145,728 B (50%), 정적 RAM 94,156 / 327,680 B (28%).
+  - zh-CN: 프로그램 1,603,625 B (50%), 정적 RAM 94,156 B.
+  - 기준 커밋 `7463e08` 대비: 플래시 +25.6 KB, RAM +696 B. `--warnings all`에서 새 코드 경고 0건.
   - 실제 보드에 플래시/부팅해 보지는 않았습니다.
 - 실차 미검증 가정(실차 로그로 확인 필요):
   - `UI_vehicleControl3`(0x294) 창문 요청을 VC가 UI 이외 노드의 프레임으로도 수행하는지, `UI_windowPercentageRequest`가 "열림 %"인지.

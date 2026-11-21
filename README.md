@@ -154,14 +154,19 @@ https://discord.gg/euPbYG8Npc
   - **더블 / 트리플**: 누름 → 뗌을 한 번의 클릭으로 세고, 마지막으로 뗀 뒤 클릭 간격(200–800, 기본 400 ms)이 지나면 클릭 수로 판정합니다.
   - **롱**: 누른 채 500–2000 ms(기본 800)가 지나면 그 즉시 실행합니다. 이때 그 전까지 센 클릭은 무효가 됩니다.
   - 0x3C2 mux1이 600 ms 넘게 안 들어오면 판정을 초기화합니다. 처음 볼 때 이미 눌려 있던 버튼은 무시합니다.
-- 동작 ID: 0 없음, 1 Easy Entry 토글, 2 미러 접기 옵션 토글, 3 벨트 알람 토글, 4 비상등 점멸 기능 토글, 5 후진 비상등 토글, 6 후진 후미등 토글, 7 문열림 비상등 토글, 8 비상등 점멸 실행, 9 미러 접기/펴기, 10 카메라.
+- 동작 ID: 0 없음, 1 Easy Entry 토글, 2 미러 접기 옵션 토글, 3 벨트 알람 토글, 5 후진 비상등 토글, 6 후진 후미등 토글, 7 문열림 비상등 토글, 8 비상등 점멸 실행, 9 미러 접기/펴기, 10 카메라. (4 "비상등 점멸 기능 토글"은 헷갈려서 없앴고, 저장돼 있던 값은 "없음"으로 읽습니다.)
+- **기존 기능 토글(동작 11–19)**: 11 Nag Killer, 12 ISA Suppression, 13 Disable Driver Monitoring, 14 Auto Blinker, 15 TLSSC, 16 Door Button Cancel, 17 Visual Speed Control, 18 Continuous AP, 19 Battery Preheating.
+  - 대시보드에서 해당 기능을 켜고 끌 때와 **같은 내부 함수**로 바꾸고 저장합니다. Nag Killer는 대시보드와 똑같이 TSL9 입력 정리 → CAN TX 일시 보류 → 저장 → 해제 순서로 처리합니다.
+  - 이 프로필에서 지원하지 않는 기능을 켜려고 하면 거부합니다(끄는 것은 항상 됩니다). Continuous AP는 대시보드에서 방식을 먼저 골라 두어야 켜집니다.
+  - 결과(OK 또는 거부 이유)는 대시보드 실시간 상태의 "Last macro"에 표시됩니다.
+- 대시보드의 매크로 목록은 버튼별로 **접힌 상태가 기본**입니다. 접힌 상태에서도 설정된 버튼은 개수 배지와 "더블 → Nag Killer 토글" 같은 요약을 보여 주고, 섹션 제목에 전체 설정 개수가 나옵니다. 탭하면 펼쳐서 수정할 수 있습니다.
 - 토글한 결과는 1.5초 뒤 NVS에 저장됩니다.
 - 각 버튼의 순정 기능은 막을 수 없어서 누를 때마다 같이 실행됩니다. 예를 들어 음성인식 버튼을 더블 클릭하면 음성인식도 열리고, 카메라 버튼을 누르면 카메라 화면도 바뀝니다. 매크로는 이 순정 동작에 더해 추가 동작을 실행합니다.
 
-**4) 비상깜빡이 N회 점멸 (1–10, 기본 3)**
-- 매크로(동작 8)나 대시보드 "Blink Now"로 실행합니다. 이미 비상등이 켜져 있으면(hazardLightRequest ≠ 0) 거부합니다.
-- 실행하면 비상등 버튼을 눌러 켜고, hazardLightRequest = 1인 동안 indicatorLeftRequest가 꺼짐 → 켜짐으로 바뀐 횟수를 셉니다. N회가 되면 다시 눌러 끕니다.
-- 안전장치로 `3초 + N × 1.2초`가 지나면 횟수와 상관없이 종료합니다.
+**4) Hazard Blink (for N seconds) — 1–30초, 기본 3초**
+- **일회성 명령**입니다. 매크로(동작 8)나 대시보드 "Blink Now"로 실행하면 비상등 버튼을 눌러 켜고, 켜진 것이 확인된 순간부터 N초 뒤 다시 눌러 끕니다.
+- 이미 비상등이 켜져 있으면(hazardLightRequest ≠ 0) 실행하지 않습니다. 비상등이 끝내 켜지지 않으면 `N + 4초` 뒤 포기합니다.
+- 대시보드의 Hazard Blink **스위치는 이 명령을 허용/차단만** 합니다. 스위치를 켠다고 비상등이 켜지지 않고, 켜진 비상등이 계속 유지되지도 않습니다. 점멸 중에 스위치를 끄면 즉시 끝내고, 이 기능이 켠 비상등만 끕니다.
 
 **5) 후진 시 비상깜빡이** — R단이면 켜고, R단을 벗어나면 끕니다.
 
@@ -180,9 +185,9 @@ https://discord.gg/euPbYG8Npc
 ### API / 저장
 
 - `GET /api/body/config` — 설정(`cfg`), 실시간 상태(`live`), 카운터(`stats`).
-- `POST /api/body/update` — 키: `eeEnabled, eeDoorMask, eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs, eeMirrorFold, eeMirrorCamera, eeUnfoldKph, eeUnfoldHoldS, sbEnabled, sbSeatMask, mcEnabled, mcLongMs, mcGapMs, mc=<버튼>,<제스처>,<동작>, hzBlinkEnabled, hzBlinkCount, rvHazard, rvLight, rvLightMode, drHazard, drOffDelayMs`.
+- `POST /api/body/update` — 키: `eeEnabled, eeDoorMask, eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs, eeMirrorFold, eeMirrorCamera, eeUnfoldKph, eeUnfoldHoldS, sbEnabled, sbSeatMask, mcEnabled, mcLongMs, mcGapMs, mc=<버튼>,<제스처>,<동작>, hzBlinkEnabled, hzBlinkSeconds, rvHazard, rvLight, rvLightMode, drHazard, drOffDelayMs`.
   - 범위를 벗어나면 400, 미지원 토폴로지는 409를 돌려줍니다.
-- `POST /api/body/action?id=8|9|10` — 동작 즉시 실행.
+- `POST /api/body/action?id=…` — 동작 즉시 실행: 8 비상등 점멸, 9 미러 접기/펴기, 10 카메라, 11–19 기존 기능 토글(id 4는 거부).
 - `GET|POST /api/wifi/timing` — 키: `slowStartEnabled, startDelayS, hideEnabled, hideDelayS`.
 - 설정은 NVS `bodycmf/cfg`에 저장합니다(42바이트, 버전 2 + 체크섬). 버튼 6개였던 이전 36바이트(버전 1) 설정도 그대로 읽어 매크로를 유지합니다. 손상되면 기본값(전부 OFF)으로 돌아가고, Reset Feature Settings로도 지워집니다.
 

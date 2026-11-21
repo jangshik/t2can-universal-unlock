@@ -111,6 +111,57 @@ static inline bool activeProfileIsModelS2017() { return activeVehicleProfile == 
 static inline bool activeCanAIsBody() {
   return vehicleProfileCanAIsBody(activeVehicleProfile, activeVehicleTopology);
 }
+static inline bool activeProfileUsesYlTopology() { return vehicleProfileUsesYlTopology(activeVehicleProfile); }
+
+// ─── Existing-feature stand-ins (record what the macro dispatcher calls) ──
+static bool g_supported = true, g_saveOk = true, g_quiesceOk = true;
+static int g_adminHoldDepth = 0, g_nagCommits = 0;
+static inline bool activeProfileNagSupported() { return g_supported; }
+static inline bool activeProfileIsaSuppressionSupported() { return g_supported; }
+static inline bool activeProfileDmsNagSupported() { return g_supported; }
+static inline bool activeProfileAdvancedEapSupported() { return g_supported; }
+static inline bool activeProfileBodyControlsSupported() { return g_supported; }
+static inline bool activeProfilePreheatSupported() { return g_supported; }
+struct NagConfig { bool enabled = false; };
+static portMUX_TYPE nagCfgMux = 0;
+static NagConfig nagCfg;
+static bool nagCfgApplyActiveProfilePolicy(NagConfig &, bool) { return true; }
+static void nagCfgClampAll(NagConfig &) {}
+struct NagScrollStoredSnapshot { int v = 7; };
+static NagScrollStoredSnapshot nagScrollRuntimeSnapshot() { return {}; }
+static void nagScrollRuntimeRestore(const NagScrollStoredSnapshot &s) { assert(s.v == 7); }
+static bool tsl9InputQuiesceForConfig() { return g_quiesceOk; }
+static void setCanTxAdministrativeHold(bool hold) { g_adminHoldDepth += hold ? 1 : -1; }
+static bool nagCfgSaveCandidateWithScroll(const NagConfig &, const NagScrollStoredSnapshot &) { return g_saveOk; }
+static void nagTsl9RuntimeReset() {}
+static void nagCfgCommit(const NagConfig &c) { nagCfg = c; g_nagCommits++; }
+static void tsl9InputHardResetAfterQuiesce(bool) {}
+static bool g_isa = false, g_dms = false, g_vision = false, g_doorCancel = false;
+static bool isaSuppressionControlSnapshot() { return g_isa; }
+static bool isaSuppressionControlApply(bool v) { if (!g_saveOk) return false; g_isa = v; return true; }
+static bool driverMonitoringControlSnapshot() { return g_dms; }
+static bool driverMonitoringControlApply(bool v) { if (!g_saveOk) return false; g_dms = v; return true; }
+static volatile bool blinkAEnabled = false, tlsscEnabled = false, preheatEnabled = false;
+static bool setAutoBlinkerEnabled(bool v, bool) { if (!g_saveOk) return false; blinkAEnabled = v; return true; }
+static bool setTlsscEnabled(bool v, bool) { if (!g_saveOk) return false; tlsscEnabled = v; return true; }
+static bool preheatMenuSetEnabled(bool v) { if (!g_saveOk) return false; preheatEnabled = v; return true; }
+struct FeatureCfgSnapshot { bool door = false; };
+static FeatureCfgSnapshot featureCfgRuntimeSnapshot() { FeatureCfgSnapshot f; f.door = g_doorCancel; return f; }
+static bool featureCfgPersistCandidate(const FeatureCfgSnapshot &) { return g_saveOk; }
+static void featureCfgRuntimeRestore(const FeatureCfgSnapshot &f) { g_doorCancel = f.door; }
+static bool visionControlSupported() { return g_supported; }
+static bool visionControlRequestDisabled() { return g_vision; }
+static uint8_t visionControlBusSnapshot() { return 0; }
+static bool visionControlApplySettings(bool d, uint8_t) { if (!g_saveOk) return false; g_vision = d; return true; }
+enum class ContApMethod : uint8_t { Unset, StalkDouble, ScrollSingle, ScrollDouble };
+enum class ContApRoute : uint8_t { None, BodyA, ChassisB, PartyA };
+struct ContApConfig { bool enabled = false; ContApMethod method = ContApMethod::Unset; };
+static ContApConfig g_contAp;
+static ContApConfig continuousApControlSnapshot() { return g_contAp; }
+static ContApRoute continuousApGestureRoutePure(uint8_t, uint8_t, ContApMethod m) {
+  return m == ContApMethod::Unset ? ContApRoute::None : ContApRoute::BodyA;
+}
+static bool continuousApControlApply(ContApConfig c) { if (!g_saveOk) return false; g_contAp = c; return true; }
 
 // ─── CAN TX stubs (record every frame) ───────────────────────────────────
 struct can_frame { uint32_t can_id; uint8_t can_dlc; uint8_t data[8]; };
@@ -521,7 +572,7 @@ static void testHazardBlinkAndMacros() {
   resetAll();
   BodyComfortConfigPure c = bodyComfortDefaultsPure();
   c.hzBlinkEnabled = true;
-  c.hzBlinkCount = 3;
+  c.hzBlinkSeconds = 3;
   c.mcEnabled = true;
   c.mcAction[BC_BTN_RIGHT_PRESS][BC_GESTURE_LONG] = BC_ACTION_RUN_HAZARD_BLINK;
   c.mcAction[BC_BTN_LEFT_PRESS][BC_GESTURE_DOUBLE] = BC_ACTION_TOGGLE_REVERSE_HAZARD;
@@ -535,12 +586,11 @@ static void testHazardBlinkAndMacros() {
   assert(bcState.blinkActive && bcState.lastMacroAction == BC_ACTION_RUN_HAZARD_BLINK);
   run(300);
   assert(!takeTx(0x3C2).empty());
-  // Hazards come on; three indicator rising edges end the blink.
+  // Hazards come on; they stay requested for 3 s from the moment they are seen on.
   car.hazard = BC_HAZARD_REQ_BUTTON;
-  for (int i = 0; i < 3; ++i) {
-    car.indicator = true; run(400);
-    car.indicator = false; run(300);
-  }
+  run(2800);
+  assert(bcState.blinkActive);
+  run(400);
   assert(!bcState.blinkActive);
   g_tx.clear();
   run(1500);
@@ -643,6 +693,66 @@ static void testHttp() {
   activeVehicleTopology = VEHICLE_TOPOLOGY_STANDARD_BODY_CHASSIS;
 }
 
+static void testExistingFeatureMacros() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.mcEnabled = true;
+  c.mcAction[BC_BTN_VOICE][BC_GESTURE_DOUBLE] = BC_ACTION_TOGGLE_NAG_KILLER;
+  c.mcAction[BC_BTN_CAMERA][BC_GESTURE_LONG] = BC_ACTION_TOGGLE_TLSSC;
+  c.mcAction[BC_BTN_CAMERA][BC_GESTURE_TRIPLE] = BC_ACTION_TOGGLE_CONTINUOUS_AP;
+  setCfg(c);
+  run(500);
+  auto dbl = [](uint8_t b) {
+    car.buttons[b] = true; run(100); car.buttons[b] = false; run(100);
+    car.buttons[b] = true; run(100); car.buttons[b] = false; run(700);
+  };
+  auto tpl = [](uint8_t b) {
+    for (int i = 0; i < 3; ++i) { car.buttons[b] = true; run(100); car.buttons[b] = false; run(100); }
+    run(600);
+  };
+  // Nag Killer: same commit path as the dashboard, admin hold released.
+  dbl(BC_BTN_VOICE);
+  assert(nagCfg.enabled && g_nagCommits == 1 && g_adminHoldDepth == 0);
+  assert(std::string(bcState.lastMacroResult) == "OK");
+  dbl(BC_BTN_VOICE);
+  assert(!nagCfg.enabled && g_nagCommits == 2);
+  // TLSSC long press.
+  car.buttons[BC_BTN_CAMERA] = true; run(1000); car.buttons[BC_BTN_CAMERA] = false; run(200);
+  assert(tlsscEnabled);
+  // Continuous AP without a chosen method is refused with a reason.
+  tpl(BC_BTN_CAMERA);
+  assert(!g_contAp.enabled && std::string(bcState.lastMacroResult).find("method") != std::string::npos);
+  g_contAp.method = ContApMethod::ScrollDouble;
+  tpl(BC_BTN_CAMERA);
+  assert(g_contAp.enabled && g_contAp.method == ContApMethod::ScrollDouble);
+  // Failures leave the feature unchanged and report why; holds stay balanced.
+  g_quiesceOk = false;
+  dbl(BC_BTN_VOICE);
+  assert(!nagCfg.enabled && g_adminHoldDepth == 0);
+  assert(std::string(bcState.lastMacroResult).find("TSL9") != std::string::npos);
+  g_quiesceOk = true;
+  g_saveOk = false;
+  dbl(BC_BTN_VOICE);
+  assert(!nagCfg.enabled && g_adminHoldDepth == 0 && std::string(bcState.lastMacroResult) == "save failed");
+  g_saveOk = true;
+  // Every existing feature is reachable through the action endpoint too.
+  server.args = {{"id", "12"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && g_isa);
+  server.args = {{"id", "13"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && g_dms);
+  server.args = {{"id", "14"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && blinkAEnabled);
+  server.args = {{"id", "16"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && g_doorCancel);
+  server.args = {{"id", "17"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && g_vision);
+  server.args = {{"id", "19"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && preheatEnabled);
+  g_supported = false;
+  server.args = {{"id", "12"}}; httpBodyComfortAction(); assert(server.lastCode == 200 && !g_isa);  // turning OFF always allowed
+  server.args = {{"id", "12"}}; httpBodyComfortAction(); assert(server.lastCode == 409 && !g_isa);
+  g_supported = true;
+  // Retired action 4 is rejected everywhere.
+  server.args = {{"id", "4"}}; httpBodyComfortAction(); assert(server.lastCode == 400);
+  server.args = {{"mc", "0,0,4"}}; httpBodyComfortUpdate(); assert(server.lastCode == 400);
+  server.args = {{"mc", "0,0,19"}}; httpBodyComfortUpdate(); assert(server.lastCode == 200);
+  server.args = {{"mc", "0,0,20"}}; httpBodyComfortUpdate(); assert(server.lastCode == 400);
+}
+
 int main() {
   bodyComfortStart();
   assert(bodyComfortTaskHandle != nullptr);
@@ -656,6 +766,7 @@ int main() {
   testDoorHazard();
   testHazardBlinkAndMacros();
   testHttp();
+  testExistingFeatureMacros();
   std::puts("body_comfort_runtime host: all tests passed");
   return 0;
 }

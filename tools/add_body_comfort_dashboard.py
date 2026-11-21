@@ -34,17 +34,24 @@ TEXT = {
         "sb": "Rear Seat-Belt Chime Off", "sbD": "Suppress the unbuckled chime for the selected 2nd-row seats.",
         "seats": ["2nd row left", "2nd row centre", "2nd row right"],
         "mc": "Steering Wheel Macros",
-        "mcD": "Double, triple or long press on a wheel button runs an action: 8 buttons × 3 gestures = 24 slots. The button's own stock function still runs on each press.",
+        "mcD": "Double, triple or long press on a wheel button runs an action, including toggling existing features such as Nag Killer or TLSSC: 8 buttons × 3 gestures = 24 slots. The button's own stock function still runs on each press.",
         "lp": "LONG PRESS (ms)", "gp": "CLICK GAP (ms)",
         "btn": ["Left scroll · press", "Right scroll · press", "Left scroll · tilt left",
                 "Left scroll · tilt right", "Right scroll · tilt left", "Right scroll · tilt right",
                 "Voice button", "Camera button"],
         "ges": ["Double", "Triple", "Long"],
         "act": ["None", "Toggle Easy Entry", "Toggle mirror fold", "Toggle rear belt chime",
-                "Toggle hazard blink", "Toggle reverse hazards", "Toggle reverse light",
-                "Toggle door hazards", "Blink hazards", "Fold / unfold mirrors", "Camera view"],
-        "hb": "Hazard Blink", "hbD": "Blink the hazards a set number of times from a macro or the button below.",
-        "hc": "BLINKS", "run": "Blink Now",
+                "", "Toggle reverse hazards", "Toggle reverse light",
+                "Toggle door hazards", "Hazard blink", "Fold / unfold mirrors", "Camera view",
+                "Toggle Nag Killer", "Toggle ISA Suppression", "Toggle Disable Driver Monitoring",
+                "Toggle Auto Blinker", "Toggle TLSSC", "Toggle Door Button Cancel",
+                "Toggle Visual Speed Control", "Toggle Continuous AP", "Toggle Battery Preheating"],
+        "actNew": "Body Comfort", "actOld": "Existing features",
+        "notSet": "Not set", "setCount": "{n} set", "collapsedHint": "Tap a button to edit its actions.",
+        "hb": "Hazard Blink", "hbT": "Hazard Blink (for {n} seconds)",
+        "hbD": "One-shot command: a macro or Blink Now turns the hazards on for the set time, then off. This switch only allows or blocks the command; it never leaves the hazards on. Nothing happens if the hazards are already on.",
+        "hc": "DURATION (s)", "run": "Blink Now",
+        "stMacro": "Last macro",
         "rh": "Reverse Hazards", "rhD": "Hazards on while in R, off again when leaving R.",
         "rl": "Reverse Rear Light", "rlD": "Turn the rear lights on while in R.",
         "rlm": ["Rear fog", "Lights ON", "Rear fog + lights ON"], "mode": "Rear light mode",
@@ -86,15 +93,21 @@ TEXT = {
         "sb": "关闭后排安全带提示音", "sbD": "对所选第二排座椅关闭未系安全带提示音。",
         "seats": ["第二排左", "第二排中", "第二排右"],
         "mc": "方向盘宏",
-        "mcD": "双击、三击或长按方向盘按键执行动作：8 个按键 × 3 种手势 = 24 个位置。每次按下时按键的原车功能仍会执行。",
+        "mcD": "双击、三击或长按方向盘按键执行动作，也可切换 Nag Killer、TLSSC 等现有功能：8 个按键 × 3 种手势 = 24 个位置。每次按下时按键的原车功能仍会执行。",
         "lp": "长按 (ms)", "gp": "连击间隔 (ms)",
         "btn": ["左滚轮 · 按下", "右滚轮 · 按下", "左滚轮 · 左拨", "左滚轮 · 右拨", "右滚轮 · 左拨", "右滚轮 · 右拨",
                 "语音按钮", "摄像头按钮"],
         "ges": ["双击", "三击", "长按"],
-        "act": ["无", "切换便捷上车", "切换后视镜折叠", "切换后排安全带提示音", "切换双闪闪烁",
-                "切换倒车双闪", "切换倒车后灯", "切换开门双闪", "双闪闪烁", "折叠 / 展开后视镜", "摄像头画面"],
-        "hb": "双闪闪烁", "hbD": "通过宏或下方按钮让双闪闪烁设定次数。",
-        "hc": "闪烁次数", "run": "立即闪烁",
+        "act": ["无", "切换便捷上车", "切换后视镜折叠", "切换后排安全带提示音", "",
+                "切换倒车双闪", "切换倒车后灯", "切换开门双闪", "双闪闪烁", "折叠 / 展开后视镜", "摄像头画面",
+                "切换 Nag Killer", "切换 ISA 抑制", "切换禁用驾驶员监控", "切换自动转向灯", "切换 TLSSC",
+                "切换车门按钮取消", "切换视觉限速控制", "切换连续 AP", "切换电池预热"],
+        "actNew": "车身舒适功能", "actOld": "现有功能",
+        "notSet": "未设置", "setCount": "已设置 {n} 个", "collapsedHint": "点击按键可编辑其动作。",
+        "hb": "双闪闪烁", "hbT": "双闪闪烁（持续 {n} 秒）",
+        "hbD": "一次性指令：通过宏或“立即闪烁”开启双闪，持续设定时间后关闭。此开关只允许或阻止该指令，不会让双闪一直亮着。如果双闪已开启则不执行。",
+        "hc": "持续时间 (s)", "run": "立即闪烁",
+        "stMacro": "最近的宏",
         "rh": "倒车双闪", "rhD": "R 挡时开启双闪，离开 R 挡后关闭。",
         "rl": "倒车后灯", "rlD": "R 挡时开启后部灯光。",
         "rlm": ["后雾灯", "灯光开启", "后雾灯 + 灯光开启"], "mode": "后灯模式",
@@ -156,6 +169,10 @@ let bc=null,bcBusy=0,wt=null;
 const tg=(id,key,desc)=>`<div class="settingToggleRow"><div><div class="listkey">${esc(key)}</div>${desc?`<div class="listdesc">${esc(desc)}</div>`:''}</div><label class="toggle"><input id="${id}" type="checkbox"/><span class="track"></span></label></div>`;
 const num=(id,label,min,max)=>`<div class="field"><label>${esc(label)}</label><input id="${id}" inputmode="numeric" max="${max}" min="${min}" step="1" type="number"/></div>`;
 const sel=(id,label,opts,style)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}"${style?` style="${style}"`:''}>${opts.map((o,i)=>`<option value="${i}">${esc(o)}</option>`).join('')}</select>`;
+const NEW_ACTS=[0,1,2,3,5,6,7,8,9,10],OLD_ACTS=[11,12,13,14,15,16,17,18,19];
+const opt=i=>`<option value="${i}">${esc(T.act[i])}</option>`;
+const macroSel=(id,label)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}" style="max-width:62%">${opt(0)}<optgroup label="${esc(T.actNew)}">${NEW_ACTS.slice(1).map(opt).join('')}</optgroup><optgroup label="${esc(T.actOld)}">${OLD_ACTS.map(opt).join('')}</optgroup></select>`;
+const MG_CSS=`<style>.bcMgHead{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer}.bcMgHead:focus-visible{outline:2px solid var(--field-ink);outline-offset:-2px}.bcMgText{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.bcMgName{font-weight:650;font-size:14px}.bcMgSum{font-size:11.5px;line-height:1.4;opacity:.62;overflow-wrap:anywhere}.bcMg.set .bcMgSum{opacity:1;font-weight:600}.bcMgBadge{flex:0 0 auto;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--field-ink);color:var(--field);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}.bcMgBadge[hidden],.bcMgBody[hidden]{display:none}.bcMgChev{flex:0 0 auto;transition:transform .2s}.bcMgHead[aria-expanded="true"] .bcMgChev{transform:rotate(90deg)}@media (prefers-reduced-motion:reduce){.bcMgChev{transition:none}}</style>`;
 const card=(inner,id)=>`<section class="card"${id?` id="${id}"`:''}>${inner}</section>`;
 const lbl=s=>`<div class="detailSectionLabel">${esc(s)}</div>`;
 const btnRow=(...b)=>`<div class="controlgrid">${b.map(([id,txt,primary])=>`<button class="btn${primary?' primary':''}" id="${id}"${b.length===1?' style="grid-column:1/-1"':''}>${esc(txt)}</button>`).join('')}</div>`;
@@ -167,13 +184,14 @@ function build(){
   h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
   h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
   let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
-  [6,7,0,1,2,3,4,5].forEach(bi=>{const b=T.btn[bi];m+=`<div class="detailRow"><div><div class="detailLeft">${esc(b)}</div></div></div>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${sel(`bcM${bi}_${gi}`,b+' · '+g,T.act,'max-width:62%')}</div>`).join('')});
-  h.push(lbl(T.mc),card(m));
-  h.push(lbl(T.hb),card(tg('bcHb',T.hb,T.hbD)+`<div class="fieldgrid">${num('bcHc',T.hc,1,10)}</div>`+btnRow(['bcHbSave',T.save,1],['bcHbRun',T.run,0])));
+  m+=`<div class="softNote" style="padding:4px 16px 8px">${esc(T.collapsedHint)}</div>`;
+  [6,7,0,1,2,3,4,5].forEach(bi=>{const b=T.btn[bi];m+=`<div class="bcMg" id="bcMg${bi}"><button type="button" class="bcMgHead" aria-expanded="false" aria-controls="bcMgB${bi}"><span class="bcMgText"><span class="bcMgName">${esc(b)}</span><span class="bcMgSum" id="bcMgS${bi}">${esc(T.notSet)}</span></span><span class="bcMgBadge" id="bcMgN${bi}" hidden></span><span class="chev bcMgChev" aria-hidden="true">›</span></button><div class="bcMgBody" id="bcMgB${bi}" hidden>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${macroSel(`bcM${bi}_${gi}`,b+' · '+g)}</div>`).join('')+`</div></div>`});
+  h.push(MG_CSS,`<div class="detailSectionLabel" id="bcMcLabel">${esc(T.mc)}</div>`,card(m));
+  h.push(`<div class="detailSectionLabel" id="bcHbLabel">${esc(T.hb)}</div>`,card(tg('bcHb',T.hb,T.hbD)+`<div class="fieldgrid">${num('bcHc',T.hc,1,30)}</div>`+btnRow(['bcHbSave',T.save,1],['bcHbRun',T.run,0])));
   h.push(lbl(T.rh),card(tg('bcRh',T.rh,T.rhD)));
   h.push(lbl(T.rl),card(tg('bcRl',T.rl,T.rlD)+`<div class="listrow"><div><div class="listkey">${esc(T.mode)}</div></div>${sel('bcRlm',T.mode,T.rlm,'max-width:62%')}</div>`));
   h.push(lbl(T.dh),card(tg('bcDh',T.dh,T.dhD)+`<div class="fieldgrid">${num('bcDd',T.dd,0,10000)}</div>`+btnRow(['bcDhSave',T.save,1])));
-  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
+  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
   h.push(`<div class="softNote" id="bcSaveState" aria-live="polite"></div>`);
   root.innerHTML=h.join('');
 }
@@ -191,7 +209,9 @@ function render(d){
   setChk('bcSb',c.sbEnabled);for(let i=0;i<3;i++)setChk('bcSeat'+i,(c.sbSeatMask>>i)&1);
   setChk('bcMc',c.mcEnabled);setVal('bcLp',c.mcLongMs);setVal('bcGp',c.mcGapMs);
   (c.mcAction||[]).forEach((row,bi)=>row.forEach((a,gi)=>setVal(`bcM${bi}_${gi}`,a)));
-  setChk('bcHb',c.hzBlinkEnabled);setVal('bcHc',c.hzBlinkCount);setChk('bcRh',c.rvHazard);
+  renderMacroSummary(c);
+  const hbT=T.hbT.replace('{n}',c.hzBlinkSeconds);setText('bcHbLabel',hbT);const hbKey=$b('bcHb')?.closest('.settingToggleRow')?.querySelector('.listkey');if(hbKey)hbKey.textContent=hbT;
+  setChk('bcHb',c.hzBlinkEnabled);setVal('bcHc',c.hzBlinkSeconds);setChk('bcRh',c.rvHazard);
   setChk('bcRl',c.rvLight);setVal('bcRlm',c.rvLightMode);setChk('bcDh',c.drHazard);setVal('bcDd',c.drOffDelayMs);
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
@@ -199,10 +219,24 @@ function render(d){
   setText('bcStEe',l.easyEntry||'—');setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
   setText('bcStCam',l.camera||'—');
   setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
+  setText('bcStMacro',s.macroEvents?`${T.btn[s.lastMacroButton]||'?'} · ${T.ges[s.lastMacroGesture]||'?'} → ${T.act[s.lastMacroAction]||T.notSet} · ${s.lastMacroResult||'—'}`:'—');
   setText('bcStCnt',`TX ${s.txOk||0}/${s.txFail||0} · EE ${s.entryOpens||0}/${s.entryRestores||0} · WX ${s.entryBlockedWeather||0} · BELT ${s.seatbeltInjected||0} · MACRO ${s.macroEvents||0}`);
   const n=[c.eeEnabled,c.sbEnabled,c.mcEnabled,c.hzBlinkEnabled,c.rvHazard,c.rvLight,c.drHazard].filter(Boolean).length;
   setText('bodyComfortRowState',!d.supported?T.na:n?n+' '+T.on:T.off);
 }
+function renderMacroSummary(c){
+  let total=0;
+  for(let bi=0;bi<8;bi++){
+    const row=(c.mcAction||[])[bi]||[0,0,0],parts=[];
+    row.forEach((a,gi)=>{if(a&&T.act[a])parts.push(`${T.ges[gi]} → ${T.act[a]}`)});
+    total+=parts.length;
+    const g=$b('bcMg'+bi);if(g)g.classList.toggle('set',parts.length>0);
+    setText('bcMgS'+bi,parts.length?parts.join(' · '):T.notSet);
+    const n=$b('bcMgN'+bi);if(n){n.hidden=!parts.length;n.textContent=String(parts.length)}
+  }
+  setText('bcMcLabel',total?`${T.mc} · ${T.setCount.replace('{n}',total)}`:T.mc);
+}
+$b('bcBody')?.addEventListener('click',e=>{const head=e.target.closest('.bcMgHead');if(!head)return;const body=$b(head.getAttribute('aria-controls'));const open=head.getAttribute('aria-expanded')!=='true';head.setAttribute('aria-expanded',String(open));if(body)body.hidden=!open});
 async function fetchBody(){try{render(await jget('/api/body/config'))}catch(e){}}
 window.fetchBodyComfort=fetchBody;
 async function save(params,el){
@@ -224,7 +258,7 @@ async function saveNums(map){const p=readNums(map);if(!p)return;if(await save(p)
 const onClick=(id,fn)=>{const e=$b(id);if(e)e.onclick=fn};
 onClick('bcEeSave',()=>saveNums([['bcRd','eeRestoreDelayMs'],['bcUk','eeUnfoldKph'],['bcUh','eeUnfoldHoldS']]));
 onClick('bcMcSave',()=>saveNums([['bcLp','mcLongMs'],['bcGp','mcGapMs']]));
-onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkCount']]));
+onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkSeconds']]));
 onClick('bcDhSave',()=>saveNums([['bcDd','drOffDelayMs']]));
 async function action(id){try{render(await featurePostJson('/api/body/action?id='+id));setText('bcSaveState','')}catch(e){setText('bcSaveState',T.failed+' · '+(e.message||e))}}
 onClick('bcHbRun',()=>action(8));onClick('bcFoldNow',()=>action(9));onClick('bcCamNow',()=>action(10));

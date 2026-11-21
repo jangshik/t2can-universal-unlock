@@ -4,11 +4,13 @@
 (()=>{
   const base=window.fetch;
   const json=(v,status=200)=>Promise.resolve(new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}}));
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkCount:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
-  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkCount:[1,10],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:0,setupMode:false};
   const wifiStart=Date.now();
   const DOORS=['FL','FR','RL','RR'];
+  const legacy={};
+  let lastMacro={button:0,gesture:0,action:0,result:''};
   const car={gear:'P',kph:0,door:[false,false,false,false],win:[0,0,0,0],rain:false,snow:false,mirrors:'UNFOLDED',camera:false,hazard:'OFF',belts:[false,false,false],log:[]};
   const st={entry:['IDLE','IDLE','IDLE','IDLE'],saved:[0,0,0,0],foldedByUs:false,cameraByUs:false,unfoldSince:0,hazardOwned:false,userHazard:false,blinkUntil:0,doorHazUntil:0,doorHazActive:false,rearLight:false};
   const stats={txOk:0,txFail:0,entryOpens:0,entryRestores:0,entryBlockedWeather:0,entryBlockedGear:0,seatbeltInjected:0,macroEvents:0,hazardPresses:0,blinkRuns:0,mirrorFolds:0,mirrorUnfolds:0,cameraPresses:0};
@@ -55,9 +57,11 @@
   }
   setInterval(tick,250);
   function runAction(a){
-    const toggles={1:'eeEnabled',2:'eeMirrorFold',3:'sbEnabled',4:'hzBlinkEnabled',5:'rvHazard',6:'rvLight',7:'drHazard'};
+    const toggles={1:'eeEnabled',2:'eeMirrorFold',3:'sbEnabled',5:'rvHazard',6:'rvLight',7:'drHazard'};
+    const existing={11:'Nag Killer',12:'ISA Suppression',13:'Disable Driver Monitoring',14:'Auto Blinker',15:'TLSSC',16:'Door Button Cancel',17:'Visual Speed Control',18:'Continuous AP',19:'Battery Preheating'};
+    if(existing[a]){legacy[a]=!legacy[a];log(`Macro: ${existing[a]} → ${legacy[a]?'ON':'OFF'} (기존 기능)`);return null}
     if(toggles[a]){cfg[toggles[a]]=!cfg[toggles[a]];log(`Macro: ${toggles[a]} → ${cfg[toggles[a]]?'ON':'OFF'}`);return null}
-    if(a===8){if(!cfg.hzBlinkEnabled)return'hazard blink disabled';if(car.hazard!=='OFF')return'hazards already on';st.blinkUntil=Date.now()+cfg.hzBlinkCount*700;stats.blinkRuns++;log(`Hazard blink ×${cfg.hzBlinkCount}`);return null}
+    if(a===8){if(!cfg.hzBlinkEnabled)return'hazard blink disabled';if(car.hazard!=='OFF')return'hazards already on';st.blinkUntil=Date.now()+cfg.hzBlinkSeconds*1000;stats.blinkRuns++;log(`Hazard blink ${cfg.hzBlinkSeconds}s`);return null}
     if(a===9){if(car.mirrors==='FOLDED'){car.mirrors='UNFOLDED';st.foldedByUs=false;tx('0x273 UI_mirrorFoldRequest=PRESENT')}else{car.mirrors='FOLDED';st.foldedByUs=true;tx('0x273 UI_mirrorFoldRequest=RETRACT')}return null}
     if(a===10){car.camera=!car.camera;stats.cameraPresses++;tx('0x3C2 mux1 camera button press');return null}
     return'no action';
@@ -70,10 +74,10 @@
         easyEntry:DOORS.map((d,i)=>d+':'+st.entry[i]).join(' '),
         mirrors:`L:${car.mirrors} R:${car.mirrors}`,mirrorFoldedByFeature:st.foldedByUs,camera:car.camera?'ON':'OFF',
         hazard:car.hazard,hazardOwned:st.hazardOwned,blinkActive:Date.now()<st.blinkUntil,reverseHazard:cfg.rvHazard&&car.gear==='R',doorHazard:st.doorHazActive,rearLight:st.rearLight},
-      stats:{...stats}};
+      stats:{...stats,lastMacroButton:lastMacro.button,lastMacroGesture:lastMacro.gesture,lastMacroAction:lastMacro.action,lastMacroResult:lastMacro.result}};
   }
   window.__bcPreview={car,cfg,st,stats,wifi,doorOpened,doorClosed,runAction,log,
-    macro(button,gesture){stats.macroEvents++;if(!cfg.mcEnabled){log('Macro ignored (macros OFF)');return}const a=cfg.mcAction[button][gesture];if(!a){log('Macro slot empty');return}const r=runAction(a);if(r)log('Macro rejected: '+r)},
+    macro(button,gesture){stats.macroEvents++;lastMacro={button,gesture,action:cfg.mcAction[button][gesture],result:'OK'};if(!cfg.mcEnabled){log('Macro ignored (macros OFF)');return}const a=cfg.mcAction[button][gesture];if(!a){log('Macro slot empty');return}const r=runAction(a);lastMacro.result=r||'OK';if(r)log('Macro rejected: '+r)},
     userHazard(){if(car.hazard==='ON'){car.hazard='OFF';if(st.hazardOwned){st.hazardOwned=false;st.userHazard=true}}else{car.hazard='ON';st.hazardOwned=false}log('Driver pressed hazard button')}};
   window.fetch=async(input,init={})=>{
     const u=new URL(typeof input==='string'?input:input.url,location.href);

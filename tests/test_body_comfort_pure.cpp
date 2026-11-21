@@ -396,16 +396,28 @@ static void testConfigBlob() {
 
   BodyComfortConfigPure bad = bodyComfortDefaultsPure();
   bad.eeRestoreDelayMs = 60000; bad.eeUnfoldKph = 0; bad.mcLongMs = 10; bad.mcGapMs = 9000;
-  bad.hzBlinkCount = 0; bad.rvLightMode = 9; bad.eeDoorMask = 0xFF; bad.mcAction[0][0] = 200;
+  bad.hzBlinkSeconds = 0; bad.rvLightMode = 9; bad.eeDoorMask = 0xFF; bad.mcAction[0][0] = 200;
   bodyComfortSanitizePure(bad);
   assert(bad.eeRestoreDelayMs == 5000 && bad.eeUnfoldKph == 1 && bad.mcLongMs == 500);
-  assert(bad.mcGapMs == 800 && bad.hzBlinkCount == 1 && bad.rvLightMode == BC_REAR_LIGHT_BOTH);
+  assert(bad.mcGapMs == 800 && bad.hzBlinkSeconds == 1 && bad.rvLightMode == BC_REAR_LIGHT_BOTH);
   assert(bad.eeDoorMask == 0x0F && bad.mcAction[0][0] == BC_ACTION_NONE);
 
   BodyComfortConfigPure t = bodyComfortDefaultsPure();
   assert(bodyComfortApplyToggleActionPure(t, BC_ACTION_TOGGLE_EASY_ENTRY) && t.eeEnabled);
   assert(bodyComfortApplyToggleActionPure(t, BC_ACTION_TOGGLE_EASY_ENTRY) && !t.eeEnabled);
   assert(!bodyComfortApplyToggleActionPure(t, BC_ACTION_RUN_HAZARD_BLINK));
+  assert(!bodyComfortApplyToggleActionPure(t, BC_ACTION_RETIRED_4));
+  assert(!bodyComfortApplyToggleActionPure(t, BC_ACTION_TOGGLE_NAG_KILLER));  // runtime-owned
+  assert(bcActionIsExistingFeaturePure(BC_ACTION_TOGGLE_NAG_KILLER));
+  assert(bcActionIsExistingFeaturePure(BC_ACTION_TOGGLE_BATTERY_PREHEAT));
+  assert(!bcActionIsExistingFeaturePure(BC_ACTION_CAMERA));
+  assert(BC_ACTION_COUNT == 20u);
+  // The retired "toggle hazard blink" slot (4) loads as NONE.
+  BodyComfortConfigPure retired = bodyComfortDefaultsPure();
+  retired.mcAction[2][1] = BC_ACTION_RETIRED_4;
+  retired.mcAction[3][0] = BC_ACTION_TOGGLE_TLSSC;
+  bodyComfortSanitizePure(retired);
+  assert(retired.mcAction[2][1] == BC_ACTION_NONE && retired.mcAction[3][0] == BC_ACTION_TOGGLE_TLSSC);
   assert(!bodyComfortApplyToggleActionPure(t, BC_ACTION_NONE));
 }
 

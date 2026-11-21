@@ -131,7 +131,8 @@ struct BcStateRuntime {
   BcPressRuntime cameraPress;
   bool blinkActive;
   uint32_t blinkStartMs;
-  uint8_t blinkEdges;
+  bool blinkOnSeen;
+  uint32_t blinkOnMs;
   bool blinkLastIndicator;
   bool reverseHazardWanted;
   BcDoorHazardPure doorHazard;
@@ -143,6 +144,7 @@ struct BcStateRuntime {
   BcMacroEventRuntime macroQueue[BC_MACRO_QUEUE_LEN];
   uint8_t macroHead, macroCount;
   uint8_t lastMacroButton, lastMacroGesture, lastMacroAction;
+  const char *lastMacroResult;
   uint32_t lastMacroMs;
   uint32_t macroEvents, macroDropped;
 
@@ -432,10 +434,6 @@ static void bodyComfortObserve(uint8_t bus, uint16_t id, const uint8_t *d, uint8
       uint8_t hazard = 0; bool indicator = false;
       if (!bcDecodeLightingPure(d, dlc, hazard, indicator)) break;
       portENTER_CRITICAL(&bcMux);
-      if (bcState.blinkActive && hazard == BC_HAZARD_REQ_BUTTON && indicator &&
-          !bcState.blinkLastIndicator && bcState.blinkEdges < 255u)
-        bcState.blinkEdges++;
-      bcState.blinkLastIndicator = indicator;
       bcState.hazardReq = hazard; bcState.indicatorOn = indicator;
       bcState.lightingMs = now; bcState.lightingValid = true;
       portEXIT_CRITICAL(&bcMux);
@@ -520,12 +518,91 @@ static const char *bcStartHazardBlinkLocked(uint32_t now) {
   if (bcState.hazardReq != BC_HAZARD_REQ_NONE) return "hazards already on";
   bcState.blinkActive = true;
   bcState.blinkStartMs = now;
-  bcState.blinkEdges = 0;
+  bcState.blinkOnSeen = false;
+  bcState.blinkOnMs = 0;
   bcState.blinkRuns++;
   return nullptr;
 }
 
+// Existing (pre-add_feats) features, toggled through the same setters the
+// dashboard uses. May write NVS and take the CAN TX barrier: never call with
+// bcMux held. Returns nullptr on success, otherwise a reason.
+static const char *bodyComfortToggleExistingFeature(uint8_t action) {
+  switch (action) {
+    case BC_ACTION_TOGGLE_NAG_KILLER: {
+      if (!activeProfileNagSupported()) return "Nag Killer unavailable for this profile";
+      NagConfig nc;
+      portENTER_CRITICAL(&nagCfgMux); nc = nagCfg; portEXIT_CRITICAL(&nagCfgMux);
+      nagCfgApplyActiveProfilePolicy(nc, false);
+      nc.enabled = !nc.enabled;
+      nagCfgClampAll(nc);
+      const NagScrollStoredSnapshot scroll = nagScrollRuntimeSnapshot();
+      if (!tsl9InputQuiesceForConfig()) return "TSL9 input cleanup pending; retry";
+      setCanTxAdministrativeHold(true);
+      if (!nagCfgSaveCandidateWithScroll(nc, scroll)) {
+        setCanTxAdministrativeHold(false);
+        return "save failed";
+      }
+      nagScrollRuntimeRestore(scroll);
+      nagTsl9RuntimeReset();
+      nagCfgCommit(nc);
+      tsl9InputHardResetAfterQuiesce(false);
+      setCanTxAdministrativeHold(false);
+      return nullptr;
+    }
+    case BC_ACTION_TOGGLE_ISA_SUPPRESSION: {
+      const bool next = !isaSuppressionControlSnapshot();
+      if (next && !activeProfileIsaSuppressionSupported()) return "ISA suppression unavailable";
+      return isaSuppressionControlApply(next) ? nullptr : "save failed";
+    }
+    case BC_ACTION_TOGGLE_DRIVER_MONITORING: {
+      const bool next = !driverMonitoringControlSnapshot();
+      if (next && !activeProfileDmsNagSupported()) return "driver monitoring control unavailable";
+      return driverMonitoringControlApply(next) ? nullptr : "save failed";
+    }
+    case BC_ACTION_TOGGLE_AUTO_BLINKER: {
+      const bool next = !blinkAEnabled;
+      if (next && !activeProfileAdvancedEapSupported()) return "Auto Blinker unavailable";
+      return setAutoBlinkerEnabled(next, true) ? nullptr : "save failed";
+    }
+    case BC_ACTION_TOGGLE_TLSSC:
+      return setTlsscEnabled(!tlsscEnabled, true) ? nullptr : "save failed";
+    case BC_ACTION_TOGGLE_DOOR_CANCEL: {
+      if (!activeProfileBodyControlsSupported() && !activeProfileUsesYlTopology())
+        return "door cancel requires Body CAN";
+      FeatureCfgSnapshot next = featureCfgRuntimeSnapshot();
+      next.door = !next.door;
+      if (!featureCfgPersistCandidate(next)) return "save failed";
+      featureCfgRuntimeRestore(next);
+      return nullptr;
+    }
+    case BC_ACTION_TOGGLE_VISION_CONTROL:
+      if (!visionControlSupported()) return "Visual Speed Control unavailable";
+      return visionControlApplySettings(!visionControlRequestDisabled(), visionControlBusSnapshot())
+          ? nullptr : "save failed";
+    case BC_ACTION_TOGGLE_CONTINUOUS_AP: {
+      ContApConfig next = continuousApControlSnapshot();
+      if (next.method == ContApMethod::Unset) return "choose a Continuous AP method first";
+      next.enabled = !next.enabled;
+      if (next.enabled && continuousApGestureRoutePure(activeVehicleProfile, activeVehicleTopology,
+                                                       next.method) == ContApRoute::None)
+        return "Continuous AP method unsupported";
+      return continuousApControlApply(next) ? nullptr : "save failed";
+    }
+    case BC_ACTION_TOGGLE_BATTERY_PREHEAT: {
+      const bool next = !preheatEnabled;
+      if (next && !activeProfilePreheatSupported()) return "preheat unavailable";
+      return preheatMenuSetEnabled(next) ? nullptr : "save failed";
+    }
+    default:
+      return "no action";
+  }
+}
+
+static const char *const BC_DEFERRED_EXISTING = "deferred";
+
 static const char *bcRunActionLocked(uint32_t now, uint8_t action) {
+  if (bcActionIsExistingFeaturePure(action)) return BC_DEFERRED_EXISTING;
   switch (action) {
     case BC_ACTION_RUN_HAZARD_BLINK:
       return bcStartHazardBlinkLocked(now);
@@ -794,11 +871,16 @@ static void bcHazardServiceLocked(uint32_t now) {
       gearFresh && (gear == BC_GEAR_D || gear == BC_GEAR_R), doorsValid || anyOpen, anyOpen,
       bcCfg.drOffDelayMs);
 
+  // Hazard blink: N seconds counted from the moment the hazards are seen on.
   if (bcState.blinkActive) {
-    const uint32_t limit = 3000u + (uint32_t)bcCfg.hzBlinkCount * 1200u;
-    if (bcState.blinkEdges >= bcCfg.hzBlinkCount || (uint32_t)(now - bcState.blinkStartMs) > limit ||
-        !bcCfg.hzBlinkEnabled)
-      bcState.blinkActive = false;
+    const uint32_t durationMs = (uint32_t)bcCfg.hzBlinkSeconds * 1000u;
+    if (!bcState.blinkOnSeen && lightingFresh && bcState.hazardReq == BC_HAZARD_REQ_BUTTON) {
+      bcState.blinkOnSeen = true;
+      bcState.blinkOnMs = now;
+    }
+    const bool elapsed = bcState.blinkOnSeen && (uint32_t)(now - bcState.blinkOnMs) >= durationMs;
+    const bool neverOn = (uint32_t)(now - bcState.blinkStartMs) > durationMs + 4000u;
+    if (elapsed || neverOn || !bcCfg.hzBlinkEnabled) bcState.blinkActive = false;
   }
 
   const bool desired = bcState.reverseHazardWanted || bcState.doorHazardWanted || bcState.blinkActive;
@@ -847,9 +929,15 @@ static void bodyComfortServiceTick(uint32_t now) {
   uint8_t actionCount = 0;
   bool save = false;
   BodyComfortConfigPure toSave = {};
+  uint8_t existing[BC_MACRO_QUEUE_LEN];
+  uint8_t existingCount = 0;
   portENTER_CRITICAL(&bcMux);
   bcMacroServiceLocked(now, actions, actionCount);
-  for (uint8_t i = 0; i < actionCount; ++i) (void)bcRunActionLocked(now, actions[i]);
+  for (uint8_t i = 0; i < actionCount; ++i) {
+    const char *r = bcRunActionLocked(now, actions[i]);
+    if (r == BC_DEFERRED_EXISTING) existing[existingCount++] = actions[i];
+    else bcState.lastMacroResult = r ? r : "OK";
+  }
   bcEntryServiceLocked(now);
   bcWindowCommandServiceLocked(now);
   bcMirrorServiceLocked(now);
@@ -860,6 +948,12 @@ static void bodyComfortServiceTick(uint32_t now) {
     save = true;
   }
   portEXIT_CRITICAL(&bcMux);
+  for (uint8_t i = 0; i < existingCount; ++i) {
+    const char *r = bodyComfortToggleExistingFeature(existing[i]);
+    portENTER_CRITICAL(&bcMux);
+    bcState.lastMacroResult = r ? r : "OK";
+    portEXIT_CRITICAL(&bcMux);
+  }
   if (save && !bodyComfortCfgPersist(toSave)) {
     portENTER_CRITICAL(&bcMux);
     bcCfgSaveFailures++;
@@ -966,7 +1060,7 @@ static String bodyComfortJson() {
   macro += ']';
   jw.raw("mcAction", macro);
   jw.boolean("hzBlinkEnabled", c.hzBlinkEnabled);
-  jw.u32("hzBlinkCount", c.hzBlinkCount);
+  jw.u32("hzBlinkSeconds", c.hzBlinkSeconds);
   jw.boolean("rvHazard", c.rvHazard);
   jw.boolean("rvLight", c.rvLight);
   jw.u32("rvLightMode", c.rvLightMode);
@@ -1041,6 +1135,7 @@ static String bodyComfortJson() {
   jw.u32("lastMacroButton", s.lastMacroButton);
   jw.u32("lastMacroGesture", s.lastMacroGesture);
   jw.u32("lastMacroAction", s.lastMacroAction);
+  jw.string("lastMacroResult", s.lastMacroResult ? s.lastMacroResult : "");
   jw.u32("lastMacroAgeMs", s.macroEvents ? (uint32_t)(now - s.lastMacroMs) : 0u);
   jw.u32("saveFailures", saveFailures);
   jw.endObject();
@@ -1114,7 +1209,7 @@ static void httpBodyComfortUpdate() {
   BC_UINT_FIELD("mcLongMs", 500u, 2000u, mcLongMs, uint16_t)
   BC_UINT_FIELD("mcGapMs", 200u, 800u, mcGapMs, uint16_t)
   BC_BOOL_FIELD("hzBlinkEnabled", hzBlinkEnabled)
-  BC_UINT_FIELD("hzBlinkCount", 1u, 10u, hzBlinkCount, uint8_t)
+  BC_UINT_FIELD("hzBlinkSeconds", 1u, 30u, hzBlinkSeconds, uint8_t)
   BC_BOOL_FIELD("rvHazard", rvHazard)
   BC_BOOL_FIELD("rvLight", rvLight)
   BC_UINT_FIELD("rvLightMode", 0u, 2u, rvLightMode, uint8_t)
@@ -1138,7 +1233,7 @@ static void httpBodyComfortUpdate() {
       if (ch != ',' && (ch < '0' || ch > '9')) { bcSendError(400, "invalid mc"); return; }
     }
     if (button < 0 || button >= BC_BTN_COUNT || gesture < 0 || gesture >= BC_GESTURE_COUNT ||
-        action < 0 || action >= BC_ACTION_COUNT) {
+        action < 0 || action >= BC_ACTION_COUNT || action == BC_ACTION_RETIRED_4) {
       bcSendError(400, "invalid mc");
       return;
     }
@@ -1172,9 +1267,14 @@ static void httpBodyComfortAction() {
     bcSendError(400, "invalid id");
     return;
   }
+  if (id == BC_ACTION_RETIRED_4) {
+    bcSendError(400, "invalid id");
+    return;
+  }
   portENTER_CRITICAL(&bcMux);
   const char *reason = bcRunActionLocked((uint32_t)millis(), (uint8_t)id);
   portEXIT_CRITICAL(&bcMux);
+  if (reason == BC_DEFERRED_EXISTING) reason = bodyComfortToggleExistingFeature((uint8_t)id);
   if (reason != nullptr) {
     bcSendError(409, reason);
     return;

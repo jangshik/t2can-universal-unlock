@@ -714,11 +714,13 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 (()=>{
   const base=window.fetch;
   const json=(v,status=200)=>Promise.resolve(new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}}));
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkCount:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
-  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkCount:[1,10],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:0,setupMode:false};
   const wifiStart=Date.now();
   const DOORS=['FL','FR','RL','RR'];
+  const legacy={};
+  let lastMacro={button:0,gesture:0,action:0,result:''};
   const car={gear:'P',kph:0,door:[false,false,false,false],win:[0,0,0,0],rain:false,snow:false,mirrors:'UNFOLDED',camera:false,hazard:'OFF',belts:[false,false,false],log:[]};
   const st={entry:['IDLE','IDLE','IDLE','IDLE'],saved:[0,0,0,0],foldedByUs:false,cameraByUs:false,unfoldSince:0,hazardOwned:false,userHazard:false,blinkUntil:0,doorHazUntil:0,doorHazActive:false,rearLight:false};
   const stats={txOk:0,txFail:0,entryOpens:0,entryRestores:0,entryBlockedWeather:0,entryBlockedGear:0,seatbeltInjected:0,macroEvents:0,hazardPresses:0,blinkRuns:0,mirrorFolds:0,mirrorUnfolds:0,cameraPresses:0};
@@ -765,9 +767,11 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
   }
   setInterval(tick,250);
   function runAction(a){
-    const toggles={1:'eeEnabled',2:'eeMirrorFold',3:'sbEnabled',4:'hzBlinkEnabled',5:'rvHazard',6:'rvLight',7:'drHazard'};
+    const toggles={1:'eeEnabled',2:'eeMirrorFold',3:'sbEnabled',5:'rvHazard',6:'rvLight',7:'drHazard'};
+    const existing={11:'Nag Killer',12:'ISA Suppression',13:'Disable Driver Monitoring',14:'Auto Blinker',15:'TLSSC',16:'Door Button Cancel',17:'Visual Speed Control',18:'Continuous AP',19:'Battery Preheating'};
+    if(existing[a]){legacy[a]=!legacy[a];log(`Macro: ${existing[a]} → ${legacy[a]?'ON':'OFF'} (기존 기능)`);return null}
     if(toggles[a]){cfg[toggles[a]]=!cfg[toggles[a]];log(`Macro: ${toggles[a]} → ${cfg[toggles[a]]?'ON':'OFF'}`);return null}
-    if(a===8){if(!cfg.hzBlinkEnabled)return'hazard blink disabled';if(car.hazard!=='OFF')return'hazards already on';st.blinkUntil=Date.now()+cfg.hzBlinkCount*700;stats.blinkRuns++;log(`Hazard blink ×${cfg.hzBlinkCount}`);return null}
+    if(a===8){if(!cfg.hzBlinkEnabled)return'hazard blink disabled';if(car.hazard!=='OFF')return'hazards already on';st.blinkUntil=Date.now()+cfg.hzBlinkSeconds*1000;stats.blinkRuns++;log(`Hazard blink ${cfg.hzBlinkSeconds}s`);return null}
     if(a===9){if(car.mirrors==='FOLDED'){car.mirrors='UNFOLDED';st.foldedByUs=false;tx('0x273 UI_mirrorFoldRequest=PRESENT')}else{car.mirrors='FOLDED';st.foldedByUs=true;tx('0x273 UI_mirrorFoldRequest=RETRACT')}return null}
     if(a===10){car.camera=!car.camera;stats.cameraPresses++;tx('0x3C2 mux1 camera button press');return null}
     return'no action';
@@ -780,10 +784,10 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
         easyEntry:DOORS.map((d,i)=>d+':'+st.entry[i]).join(' '),
         mirrors:`L:${car.mirrors} R:${car.mirrors}`,mirrorFoldedByFeature:st.foldedByUs,camera:car.camera?'ON':'OFF',
         hazard:car.hazard,hazardOwned:st.hazardOwned,blinkActive:Date.now()<st.blinkUntil,reverseHazard:cfg.rvHazard&&car.gear==='R',doorHazard:st.doorHazActive,rearLight:st.rearLight},
-      stats:{...stats}};
+      stats:{...stats,lastMacroButton:lastMacro.button,lastMacroGesture:lastMacro.gesture,lastMacroAction:lastMacro.action,lastMacroResult:lastMacro.result}};
   }
   window.__bcPreview={car,cfg,st,stats,wifi,doorOpened,doorClosed,runAction,log,
-    macro(button,gesture){stats.macroEvents++;if(!cfg.mcEnabled){log('Macro ignored (macros OFF)');return}const a=cfg.mcAction[button][gesture];if(!a){log('Macro slot empty');return}const r=runAction(a);if(r)log('Macro rejected: '+r)},
+    macro(button,gesture){stats.macroEvents++;lastMacro={button,gesture,action:cfg.mcAction[button][gesture],result:'OK'};if(!cfg.mcEnabled){log('Macro ignored (macros OFF)');return}const a=cfg.mcAction[button][gesture];if(!a){log('Macro slot empty');return}const r=runAction(a);lastMacro.result=r||'OK';if(r)log('Macro rejected: '+r)},
     userHazard(){if(car.hazard==='ON'){car.hazard='OFF';if(st.hazardOwned){st.hazardOwned=false;st.userHazard=true}}else{car.hazard='ON';st.hazardOwned=false}log('Driver pressed hazard button')}};
   window.fetch=async(input,init={})=>{
     const u=new URL(typeof input==='string'?input:input.url,'http://t2can.local/');
@@ -2533,13 +2537,17 @@ setInterval(()=>{if(universalBootReady){pollTick(false);renderHeartbeatSnapshot(
   boot();
 })();</script>
 <script>(()=>{
-const T={"back":"Back","settings":"Settings","rowKey":"Body Comfort","rowDesc":"Easy Entry, hazards, rear belts and wheel macros.","title":"Body Comfort","sub":"HW4 Model Y Juniper body features. Each feature stays OFF until enabled. Commands are copies of live vehicle frames on the Body CAN.","unsupported":"Requires Body + Chassis (Model Y Juniper) or Model Y L. This vehicle profile cannot use these features.","experimental":"This profile is not Juniper / Model Y L: the frame layout is unverified, treat every feature as experimental.","ee":"Easy Entry","eeD":"In P, an opening door lowers its window fully. Closing the door returns it to the previous position.","doors":["Front left door","Front right door","Rear left door","Rear right door"],"wx":"Block in rain / snow","wxD":"Uses the vehicle rain / snow detection.","wxs":"Block when weather is unknown","wxsD":"Fail closed if the weather signal is missing.","rd":"RESTORE DELAY (ms)","mf":"Fold mirrors","mfD":"Fold the side mirrors when Easy Entry acts.","cam":"Camera while folded","camD":"Show the camera view in D/N while this feature has the mirrors folded.","uk":"UNFOLD ABOVE (km/h)","uh":"FOR (s)","ufD":"Mirrors folded by this feature unfold in D after the speed stays above this value for this time. Mirrors you fold yourself are never unfolded.","sb":"Rear Seat-Belt Chime Off","sbD":"Suppress the unbuckled chime for the selected 2nd-row seats.","seats":["2nd row left","2nd row centre","2nd row right"],"mc":"Steering Wheel Macros","mcD":"Double, triple or long press on a wheel button runs an action: 8 buttons × 3 gestures = 24 slots. The button's own stock function still runs on each press.","lp":"LONG PRESS (ms)","gp":"CLICK GAP (ms)","btn":["Left scroll · press","Right scroll · press","Left scroll · tilt left","Left scroll · tilt right","Right scroll · tilt left","Right scroll · tilt right","Voice button","Camera button"],"ges":["Double","Triple","Long"],"act":["None","Toggle Easy Entry","Toggle mirror fold","Toggle rear belt chime","Toggle hazard blink","Toggle reverse hazards","Toggle reverse light","Toggle door hazards","Blink hazards","Fold / unfold mirrors","Camera view"],"hb":"Hazard Blink","hbD":"Blink the hazards a set number of times from a macro or the button below.","hc":"BLINKS","run":"Blink Now","rh":"Reverse Hazards","rhD":"Hazards on while in R, off again when leaving R.","rl":"Reverse Rear Light","rlD":"Turn the rear lights on while in R.","rlm":["Rear fog","Lights ON","Rear fog + lights ON"],"mode":"Rear light mode","dh":"Door-Open Hazards (D/R)","dhD":"A door opened in D or R turns the hazards on until every door is closed again.","dd":"OFF DELAY AFTER CLOSE (ms)","save":"Save","saving":"Saving…","saved":"Saved","failed":"Not saved","status":"LIVE STATUS","foldNow":"Fold / Unfold Mirrors","camNow":"Camera View","stBus":"Bus","stGear":"Gear · speed","stWx":"Weather","stDoors":"Doors","stWin":"Windows","stEe":"Easy Entry","stMir":"Mirrors","stCam":"Camera","stHaz":"Hazards","stCnt":"Counters","on":"ON","off":"OFF","na":"N/A","wifiLabel":"WI-FI TIMING","wifiSlow":"Wi-Fi Slow Start","wifiSlowD":"Start the access point after a delay. CAN and every other feature start normally.","wifiHide":"Hide Wi-Fi Name","wifiHideD":"Hide the SSID after the access point has been on for the set time.","wifiStart":"START DELAY (s)","wifiHideAfter":"HIDE AFTER (s)","wifiSave":"Save Wi-Fi Timing","wifiNote":"A hidden network stays reachable from phones that already saved it. Profile setup mode always starts the access point immediately and never hides it. Hiding restarts the access point once."};
+const T={"back":"Back","settings":"Settings","rowKey":"Body Comfort","rowDesc":"Easy Entry, hazards, rear belts and wheel macros.","title":"Body Comfort","sub":"HW4 Model Y Juniper body features. Each feature stays OFF until enabled. Commands are copies of live vehicle frames on the Body CAN.","unsupported":"Requires Body + Chassis (Model Y Juniper) or Model Y L. This vehicle profile cannot use these features.","experimental":"This profile is not Juniper / Model Y L: the frame layout is unverified, treat every feature as experimental.","ee":"Easy Entry","eeD":"In P, an opening door lowers its window fully. Closing the door returns it to the previous position.","doors":["Front left door","Front right door","Rear left door","Rear right door"],"wx":"Block in rain / snow","wxD":"Uses the vehicle rain / snow detection.","wxs":"Block when weather is unknown","wxsD":"Fail closed if the weather signal is missing.","rd":"RESTORE DELAY (ms)","mf":"Fold mirrors","mfD":"Fold the side mirrors when Easy Entry acts.","cam":"Camera while folded","camD":"Show the camera view in D/N while this feature has the mirrors folded.","uk":"UNFOLD ABOVE (km/h)","uh":"FOR (s)","ufD":"Mirrors folded by this feature unfold in D after the speed stays above this value for this time. Mirrors you fold yourself are never unfolded.","sb":"Rear Seat-Belt Chime Off","sbD":"Suppress the unbuckled chime for the selected 2nd-row seats.","seats":["2nd row left","2nd row centre","2nd row right"],"mc":"Steering Wheel Macros","mcD":"Double, triple or long press on a wheel button runs an action, including toggling existing features such as Nag Killer or TLSSC: 8 buttons × 3 gestures = 24 slots. The button's own stock function still runs on each press.","lp":"LONG PRESS (ms)","gp":"CLICK GAP (ms)","btn":["Left scroll · press","Right scroll · press","Left scroll · tilt left","Left scroll · tilt right","Right scroll · tilt left","Right scroll · tilt right","Voice button","Camera button"],"ges":["Double","Triple","Long"],"act":["None","Toggle Easy Entry","Toggle mirror fold","Toggle rear belt chime","","Toggle reverse hazards","Toggle reverse light","Toggle door hazards","Hazard blink","Fold / unfold mirrors","Camera view","Toggle Nag Killer","Toggle ISA Suppression","Toggle Disable Driver Monitoring","Toggle Auto Blinker","Toggle TLSSC","Toggle Door Button Cancel","Toggle Visual Speed Control","Toggle Continuous AP","Toggle Battery Preheating"],"actNew":"Body Comfort","actOld":"Existing features","notSet":"Not set","setCount":"{n} set","collapsedHint":"Tap a button to edit its actions.","hb":"Hazard Blink","hbT":"Hazard Blink (for {n} seconds)","hbD":"One-shot command: a macro or Blink Now turns the hazards on for the set time, then off. This switch only allows or blocks the command; it never leaves the hazards on. Nothing happens if the hazards are already on.","hc":"DURATION (s)","run":"Blink Now","stMacro":"Last macro","rh":"Reverse Hazards","rhD":"Hazards on while in R, off again when leaving R.","rl":"Reverse Rear Light","rlD":"Turn the rear lights on while in R.","rlm":["Rear fog","Lights ON","Rear fog + lights ON"],"mode":"Rear light mode","dh":"Door-Open Hazards (D/R)","dhD":"A door opened in D or R turns the hazards on until every door is closed again.","dd":"OFF DELAY AFTER CLOSE (ms)","save":"Save","saving":"Saving…","saved":"Saved","failed":"Not saved","status":"LIVE STATUS","foldNow":"Fold / Unfold Mirrors","camNow":"Camera View","stBus":"Bus","stGear":"Gear · speed","stWx":"Weather","stDoors":"Doors","stWin":"Windows","stEe":"Easy Entry","stMir":"Mirrors","stCam":"Camera","stHaz":"Hazards","stCnt":"Counters","on":"ON","off":"OFF","na":"N/A","wifiLabel":"WI-FI TIMING","wifiSlow":"Wi-Fi Slow Start","wifiSlowD":"Start the access point after a delay. CAN and every other feature start normally.","wifiHide":"Hide Wi-Fi Name","wifiHideD":"Hide the SSID after the access point has been on for the set time.","wifiStart":"START DELAY (s)","wifiHideAfter":"HIDE AFTER (s)","wifiSave":"Save Wi-Fi Timing","wifiNote":"A hidden network stays reachable from phones that already saved it. Profile setup mode always starts the access point immediately and never hides it. Hiding restarts the access point once."};
 const $b=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let bc=null,bcBusy=0,wt=null;
 const tg=(id,key,desc)=>`<div class="settingToggleRow"><div><div class="listkey">${esc(key)}</div>${desc?`<div class="listdesc">${esc(desc)}</div>`:''}</div><label class="toggle"><input id="${id}" type="checkbox"/><span class="track"></span></label></div>`;
 const num=(id,label,min,max)=>`<div class="field"><label>${esc(label)}</label><input id="${id}" inputmode="numeric" max="${max}" min="${min}" step="1" type="number"/></div>`;
 const sel=(id,label,opts,style)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}"${style?` style="${style}"`:''}>${opts.map((o,i)=>`<option value="${i}">${esc(o)}</option>`).join('')}</select>`;
+const NEW_ACTS=[0,1,2,3,5,6,7,8,9,10],OLD_ACTS=[11,12,13,14,15,16,17,18,19];
+const opt=i=>`<option value="${i}">${esc(T.act[i])}</option>`;
+const macroSel=(id,label)=>`<select aria-label="${esc(label)}" class="selectArrow labSelect" id="${id}" style="max-width:62%">${opt(0)}<optgroup label="${esc(T.actNew)}">${NEW_ACTS.slice(1).map(opt).join('')}</optgroup><optgroup label="${esc(T.actOld)}">${OLD_ACTS.map(opt).join('')}</optgroup></select>`;
+const MG_CSS=`<style>.bcMgHead{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer}.bcMgHead:focus-visible{outline:2px solid var(--field-ink);outline-offset:-2px}.bcMgText{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.bcMgName{font-weight:650;font-size:14px}.bcMgSum{font-size:11.5px;line-height:1.4;opacity:.62;overflow-wrap:anywhere}.bcMg.set .bcMgSum{opacity:1;font-weight:600}.bcMgBadge{flex:0 0 auto;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--field-ink);color:var(--field);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}.bcMgBadge[hidden],.bcMgBody[hidden]{display:none}.bcMgChev{flex:0 0 auto;transition:transform .2s}.bcMgHead[aria-expanded="true"] .bcMgChev{transform:rotate(90deg)}@media (prefers-reduced-motion:reduce){.bcMgChev{transition:none}}</style>`;
 const card=(inner,id)=>`<section class="card"${id?` id="${id}"`:''}>${inner}</section>`;
 const lbl=s=>`<div class="detailSectionLabel">${esc(s)}</div>`;
 const btnRow=(...b)=>`<div class="controlgrid">${b.map(([id,txt,primary])=>`<button class="btn${primary?' primary':''}" id="${id}"${b.length===1?' style="grid-column:1/-1"':''}>${esc(txt)}</button>`).join('')}</div>`;
@@ -2551,13 +2559,14 @@ function build(){
   h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
   h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
   let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
-  [6,7,0,1,2,3,4,5].forEach(bi=>{const b=T.btn[bi];m+=`<div class="detailRow"><div><div class="detailLeft">${esc(b)}</div></div></div>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${sel(`bcM${bi}_${gi}`,b+' · '+g,T.act,'max-width:62%')}</div>`).join('')});
-  h.push(lbl(T.mc),card(m));
-  h.push(lbl(T.hb),card(tg('bcHb',T.hb,T.hbD)+`<div class="fieldgrid">${num('bcHc',T.hc,1,10)}</div>`+btnRow(['bcHbSave',T.save,1],['bcHbRun',T.run,0])));
+  m+=`<div class="softNote" style="padding:4px 16px 8px">${esc(T.collapsedHint)}</div>`;
+  [6,7,0,1,2,3,4,5].forEach(bi=>{const b=T.btn[bi];m+=`<div class="bcMg" id="bcMg${bi}"><button type="button" class="bcMgHead" aria-expanded="false" aria-controls="bcMgB${bi}"><span class="bcMgText"><span class="bcMgName">${esc(b)}</span><span class="bcMgSum" id="bcMgS${bi}">${esc(T.notSet)}</span></span><span class="bcMgBadge" id="bcMgN${bi}" hidden></span><span class="chev bcMgChev" aria-hidden="true">›</span></button><div class="bcMgBody" id="bcMgB${bi}" hidden>`+T.ges.map((g,gi)=>`<div class="listrow"><div><div class="listdesc">${esc(g)}</div></div>${macroSel(`bcM${bi}_${gi}`,b+' · '+g)}</div>`).join('')+`</div></div>`});
+  h.push(MG_CSS,`<div class="detailSectionLabel" id="bcMcLabel">${esc(T.mc)}</div>`,card(m));
+  h.push(`<div class="detailSectionLabel" id="bcHbLabel">${esc(T.hb)}</div>`,card(tg('bcHb',T.hb,T.hbD)+`<div class="fieldgrid">${num('bcHc',T.hc,1,30)}</div>`+btnRow(['bcHbSave',T.save,1],['bcHbRun',T.run,0])));
   h.push(lbl(T.rh),card(tg('bcRh',T.rh,T.rhD)));
   h.push(lbl(T.rl),card(tg('bcRl',T.rl,T.rlD)+`<div class="listrow"><div><div class="listkey">${esc(T.mode)}</div></div>${sel('bcRlm',T.mode,T.rlm,'max-width:62%')}</div>`));
   h.push(lbl(T.dh),card(tg('bcDh',T.dh,T.dhD)+`<div class="fieldgrid">${num('bcDd',T.dd,0,10000)}</div>`+btnRow(['bcDhSave',T.save,1])));
-  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
+  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
   h.push(`<div class="softNote" id="bcSaveState" aria-live="polite"></div>`);
   root.innerHTML=h.join('');
 }
@@ -2575,7 +2584,9 @@ function render(d){
   setChk('bcSb',c.sbEnabled);for(let i=0;i<3;i++)setChk('bcSeat'+i,(c.sbSeatMask>>i)&1);
   setChk('bcMc',c.mcEnabled);setVal('bcLp',c.mcLongMs);setVal('bcGp',c.mcGapMs);
   (c.mcAction||[]).forEach((row,bi)=>row.forEach((a,gi)=>setVal(`bcM${bi}_${gi}`,a)));
-  setChk('bcHb',c.hzBlinkEnabled);setVal('bcHc',c.hzBlinkCount);setChk('bcRh',c.rvHazard);
+  renderMacroSummary(c);
+  const hbT=T.hbT.replace('{n}',c.hzBlinkSeconds);setText('bcHbLabel',hbT);const hbKey=$b('bcHb')?.closest('.settingToggleRow')?.querySelector('.listkey');if(hbKey)hbKey.textContent=hbT;
+  setChk('bcHb',c.hzBlinkEnabled);setVal('bcHc',c.hzBlinkSeconds);setChk('bcRh',c.rvHazard);
   setChk('bcRl',c.rvLight);setVal('bcRlm',c.rvLightMode);setChk('bcDh',c.drHazard);setVal('bcDd',c.drOffDelayMs);
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
@@ -2583,10 +2594,24 @@ function render(d){
   setText('bcStEe',l.easyEntry||'—');setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
   setText('bcStCam',l.camera||'—');
   setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
+  setText('bcStMacro',s.macroEvents?`${T.btn[s.lastMacroButton]||'?'} · ${T.ges[s.lastMacroGesture]||'?'} → ${T.act[s.lastMacroAction]||T.notSet} · ${s.lastMacroResult||'—'}`:'—');
   setText('bcStCnt',`TX ${s.txOk||0}/${s.txFail||0} · EE ${s.entryOpens||0}/${s.entryRestores||0} · WX ${s.entryBlockedWeather||0} · BELT ${s.seatbeltInjected||0} · MACRO ${s.macroEvents||0}`);
   const n=[c.eeEnabled,c.sbEnabled,c.mcEnabled,c.hzBlinkEnabled,c.rvHazard,c.rvLight,c.drHazard].filter(Boolean).length;
   setText('bodyComfortRowState',!d.supported?T.na:n?n+' '+T.on:T.off);
 }
+function renderMacroSummary(c){
+  let total=0;
+  for(let bi=0;bi<8;bi++){
+    const row=(c.mcAction||[])[bi]||[0,0,0],parts=[];
+    row.forEach((a,gi)=>{if(a&&T.act[a])parts.push(`${T.ges[gi]} → ${T.act[a]}`)});
+    total+=parts.length;
+    const g=$b('bcMg'+bi);if(g)g.classList.toggle('set',parts.length>0);
+    setText('bcMgS'+bi,parts.length?parts.join(' · '):T.notSet);
+    const n=$b('bcMgN'+bi);if(n){n.hidden=!parts.length;n.textContent=String(parts.length)}
+  }
+  setText('bcMcLabel',total?`${T.mc} · ${T.setCount.replace('{n}',total)}`:T.mc);
+}
+$b('bcBody')?.addEventListener('click',e=>{const head=e.target.closest('.bcMgHead');if(!head)return;const body=$b(head.getAttribute('aria-controls'));const open=head.getAttribute('aria-expanded')!=='true';head.setAttribute('aria-expanded',String(open));if(body)body.hidden=!open});
 async function fetchBody(){try{render(await jget('/api/body/config'))}catch(e){}}
 window.fetchBodyComfort=fetchBody;
 async function save(params,el){
@@ -2608,7 +2633,7 @@ async function saveNums(map){const p=readNums(map);if(!p)return;if(await save(p)
 const onClick=(id,fn)=>{const e=$b(id);if(e)e.onclick=fn};
 onClick('bcEeSave',()=>saveNums([['bcRd','eeRestoreDelayMs'],['bcUk','eeUnfoldKph'],['bcUh','eeUnfoldHoldS']]));
 onClick('bcMcSave',()=>saveNums([['bcLp','mcLongMs'],['bcGp','mcGapMs']]));
-onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkCount']]));
+onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkSeconds']]));
 onClick('bcDhSave',()=>saveNums([['bcDd','drOffDelayMs']]));
 async function action(id){try{render(await featurePostJson('/api/body/action?id='+id));setText('bcSaveState','')}catch(e){setText('bcSaveState',T.failed+' · '+(e.message||e))}}
 onClick('bcHbRun',()=>action(8));onClick('bcFoldNow',()=>action(9));onClick('bcCamNow',()=>action(10));

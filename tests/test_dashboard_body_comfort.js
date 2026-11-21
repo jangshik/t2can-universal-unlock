@@ -6,9 +6,9 @@ const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
 const root=path.resolve(__dirname,'..');
 
 function firmware(){
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkCount:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
-  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkCount:[1,10],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000]};
   const state={cfg,wifi,supported:true,failNext:0,actions:[]};
   state.json=()=>({ok:true,supported:state.supported,bus:state.supported?'BODY_CAN_A':'NONE',layout:state.supported?'JUNIPER_VEH':'NONE',taskRunning:true,cfg:JSON.parse(JSON.stringify(cfg)),live:{gear:'P',speedKph:0,weather:'CLEAR',doors:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',windows:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',easyEntry:'FL:IDLE FR:IDLE RL:IDLE RR:IDLE',mirrors:'L:UNFOLDED R:UNFOLDED',mirrorFoldedByFeature:false,camera:'OFF',hazard:'OFF',hazardOwned:false,blinkActive:false,reverseHazard:false,doorHazard:false,rearLight:false},stats:{txOk:4,txFail:0,entryOpens:1,entryRestores:1,entryBlockedWeather:0,seatbeltInjected:0,macroEvents:0}});
   state.update=params=>{
@@ -61,7 +61,13 @@ async function check(html,label,zh=false){
     assert.equal(await page.locator('#panelBodyComfort select[id^="bcM"]').count(),24,'macro selects');
     assert.deepEqual(await page.locator('#panelBodyComfort select[id^="bcM"]').evaluateAll(s=>s.slice(0,6).map(e=>e.id)),['bcM6_0','bcM6_1','bcM6_2','bcM7_0','bcM7_1','bcM7_2'],'voice and camera listed first');
     assert.equal(await page.locator('#bcRlm option').count(),3);
-    assert.equal(await page.locator('#bcM0_0 option').count(),11,'macro actions');
+    assert.equal(await page.locator('#bcM0_0 option').count(),19,'10 Body Comfort + 9 existing-feature actions');
+    assert.equal(await page.locator('#bcM0_0 option[value="4"]').count(),0,'retired action hidden');
+    // Macro groups start collapsed and say "Not set".
+    assert.equal(await page.locator('.bcMgBody:not([hidden])').count(),0,'all macro groups collapsed');
+    assert.equal(await page.locator('#bcM6_0').isVisible(),false);
+    assert.match(await page.locator('#bcMgS6').textContent(),zh?/未设置/:/Not set/);
+    assert.equal(await page.locator('#bcMgN6').isHidden(),true);
     assert.equal(await page.locator('#bcSupport').isHidden(),true,'Juniper layout note hidden');
     assert.equal(await page.locator('#bcEe').isChecked(),false,'all features start OFF');
 
@@ -85,6 +91,22 @@ async function check(html,label,zh=false){
     await page.evaluate(()=>{const s=document.getElementById('bcM7_0');s.value='9';s.dispatchEvent(new Event('change',{bubbles:true}))});
     await page.waitForTimeout(50);
     assert.equal(fw.cfg.mcAction[7][0],9,'camera double -> fold mirrors');
+    // Existing feature: voice long -> Nag Killer, via the collapsed group.
+    await page.locator('#bcMg6 .bcMgHead').click();
+    assert.equal(await page.locator('#bcMg6 .bcMgHead').getAttribute('aria-expanded'),'true');
+    assert.equal(await page.locator('#bcM6_2').isVisible(),true);
+    await page.evaluate(()=>{const s=document.getElementById('bcM6_2');s.value='11';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.waitForFunction(()=>document.getElementById('bcMgN6').textContent==='1');
+    assert.equal(fw.cfg.mcAction[6][2],11);
+    await page.locator('#bcMg6 .bcMgHead').click();
+    assert.equal(await page.locator('#bcM6_2').isVisible(),false,'collapses again');
+    assert.match(await page.locator('#bcMgS6').textContent(),zh?/长按 → 切换 Nag Killer/:/Long → Toggle Nag Killer/);
+    assert.equal(await page.locator('#bcMg6').evaluate(e=>e.classList.contains('set')),true);
+    assert.match(await page.locator('#bcMgS7').textContent(),zh?/双击 → 折叠/:/Double → Fold \/ unfold mirrors/);
+    assert.match(await page.locator('#bcMgS1').textContent(),zh?/长按 → 双闪闪烁/:/Long → Hazard blink/);
+    assert.match(await page.locator('#bcMcLabel').textContent(),zh?/已设置 3 个/:/3 set/);
+    // Hazard blink is described in seconds.
+    assert.match(await page.locator('#bcHbLabel').textContent(),zh?/持续 3 秒/:/for 3 seconds/);
     // Numeric save with validation.
     await page.locator('#bcRd').fill('6000');
     await page.locator('#bcEeSave').click();
