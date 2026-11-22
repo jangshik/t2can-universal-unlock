@@ -213,6 +213,7 @@ struct Car {
   uint8_t pedalRaw = 0;     // 0.4 % steps
   uint8_t brake = 0;        // 0 OFF 1 ON
   bool handle[2] = {false, false};
+  bool honk = false;
   int vc3Mode = 0;                 // 0 periodic, 1 only while vc3Once, 2 never
   bool vc3Once = false;
   uint8_t lockSimple = 1;          // 1 UNLOCKED, 2 LOCKED, 0 = frame absent
@@ -277,7 +278,7 @@ static void sendFrames() {
   for (uint8_t b = 0; b < BC_BTN_COUNT; ++b)
     bcSetBitsPure(d, bcButtonStartBitPure(b), 2, car.buttons[b] ? BC_SWC_ON : 1u);
   rx(0x3C2, d);
-  memset(d, 0, 8); d[2] = 0x11; rx(0x273, d);
+  memset(d, 0, 8); d[2] = 0x11; bcSetBitsPure(d, 61, 1, car.honk ? 1u : 0u); rx(0x273, d);
   memset(d, 0, 8); rx(0x3B3, d);
   if (car.vc3Mode == 0 || (car.vc3Mode == 1 && car.vc3Once)) {
     memset(d, 0, 8); d[0] = 0x40; d[2] = 0xC0; bcSetBitsPure(d, 17, 1, car.vc3Once ? 1u : 0u); rx(0x294, d);
@@ -1075,6 +1076,40 @@ static void testWindowDelivery() {
   assert(server.lastCode == 200 && !bcCfg.eeOpenPercent);
 }
 
+static void testRearLightReinforcement() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.rvLight = true;
+  c.rvLightMode = BC_REAR_LIGHT_BOTH;
+  setCfg(c);
+  car.honk = true;       // a stale one-shot request in the stock frame
+  run(500);
+  assert(g_tx.empty());
+  car.gear = BC_GEAR_R;
+  run(300);
+  g_tx.clear();
+  run(1000);
+  auto fog = takeTx(0x273);
+  auto lights = takeTx(0x3B3);
+  // 10 stock-follow copies plus reinforcement in between (every 40 ms).
+  assert(fog.size() >= 20 && lights.size() >= 20);
+  int reinforced = 0;
+  for (const auto &f : fog) {
+    assert(bcGetBitsPure(f.data, 23, 1) == 1u);
+    if (bcGetBitsPure(f.data, 61, 1) == 0u) reinforced++;  // honk cleared only in rebuilt copies
+  }
+  assert(reinforced >= 10);
+  for (const auto &f : lights) assert(bcGetBitsPure(f.data, 9, 3) == BC_LIGHT_SWITCH_ON);
+  assert(bcState.rearLightReinforced > 0);
+  // Stock frames stop: reinforcement stops once the template is 300 ms old.
+  // Leaving R stops everything.
+  car.gear = BC_GEAR_P;
+  run(300);
+  g_tx.clear();
+  run(1000);
+  assert(takeTx(0x273).empty() && takeTx(0x3B3).empty());
+}
+
 int main() {
   bodyComfortStart();
   assert(bodyComfortTaskHandle != nullptr);
@@ -1093,6 +1128,7 @@ int main() {
   testDoorHandleFrunk();
   testListenOnly();
   testWindowDelivery();
+  testRearLightReinforcement();
   std::puts("body_comfort_runtime host: all tests passed");
   return 0;
 }

@@ -183,7 +183,10 @@ struct BcStateRuntime {
   uint32_t mirrorFolds, mirrorUnfolds, mirrorCmdTimeouts, cameraPresses;
   uint32_t hazardPresses, blinkRuns;
   uint32_t seatbeltInjected, seatbeltBadChecksum;
-  uint32_t rearLightInjected;
+  uint32_t rearLightInjected, rearLightReinforced, rearLightTxFail;
+  uint8_t vc273Template[8]; uint32_t vc273Ms; bool vc273Valid;
+  uint8_t vc3b3Template[8]; uint32_t vc3b3Ms; bool vc3b3Valid;
+  uint32_t fogLastTxMs, lightLastTxMs;
 };
 
 static portMUX_TYPE bcMux = portMUX_INITIALIZER_UNLOCKED;
@@ -351,6 +354,9 @@ static void bodyComfortObserveVehicleControl(uint8_t bus, const uint8_t *d, uint
   bool send = false;
   bool fogSent = false;
   portENTER_CRITICAL(&bcMux);
+  memcpy(bcState.vc273Template, d, 8);
+  bcState.vc273Ms = now;
+  bcState.vc273Valid = true;
   BcOneShotRuntime &m = bcState.mirrorCmd;
   if (m.active && m.framesLeft > 0u && (uint32_t)(now - m.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) {
     bcSetMirrorFoldRequestPure(out, bcState.mirrorCmdRequest);
@@ -371,13 +377,22 @@ static void bodyComfortObserveVehicleControl(uint8_t bus, const uint8_t *d, uint
   }
   if (fogSent) bcState.rearLightInjected++;
   portEXIT_CRITICAL(&bcMux);
-  if (send) bodyComfortTransmit(bus, BC_ID_UI_VEHICLE_CONTROL, out, 8);
+  if (!send) return;
+  const bool ok = bodyComfortTransmit(bus, BC_ID_UI_VEHICLE_CONTROL, out, 8);
+  if (fogSent) {
+    portENTER_CRITICAL(&bcMux);
+    if (ok) bcState.fogLastTxMs = now; else bcState.rearLightTxFail++;
+    portEXIT_CRITICAL(&bcMux);
+  }
 }
 
-static void bodyComfortObserveVehicleControl2(uint8_t bus, const uint8_t *d, uint8_t dlc) {
+static void bodyComfortObserveVehicleControl2(uint8_t bus, const uint8_t *d, uint8_t dlc, uint32_t now) {
   if (dlc < 8u) return;
   bool send = false;
   portENTER_CRITICAL(&bcMux);
+  memcpy(bcState.vc3b3Template, d, 8);
+  bcState.vc3b3Ms = now;
+  bcState.vc3b3Valid = true;
   send = bcState.rearLightActive && bcCfg.rvLightMode != BC_REAR_LIGHT_FOG &&
          bcGetBitsPure(d, 9, 3) != BC_LIGHT_SWITCH_ON;
   if (send) bcState.rearLightInjected++;
@@ -386,7 +401,41 @@ static void bodyComfortObserveVehicleControl2(uint8_t bus, const uint8_t *d, uin
   uint8_t out[8];
   memcpy(out, d, 8);
   bcSetLightSwitchPure(out, BC_LIGHT_SWITCH_ON);
-  bodyComfortTransmit(bus, BC_ID_UI_VEHICLE_CONTROL2, out, 8);
+  const bool ok = bodyComfortTransmit(bus, BC_ID_UI_VEHICLE_CONTROL2, out, 8);
+  portENTER_CRITICAL(&bcMux);
+  if (ok) bcState.lightLastTxMs = now; else bcState.rearLightTxFail++;
+  portEXIT_CRITICAL(&bcMux);
+}
+
+// Reverse rear light: re-send the overridden copy between stock frames so the
+// override stays the newest value even when a stock frame or a send is missed.
+// Built from the newest stock frame (<= 300 ms) with one-shot requests cleared.
+static void bcRearLightReinforceLocked(uint32_t now, uint8_t fog[8], bool &fogOut,
+                                       uint8_t light[8], bool &lightOut) {
+  fogOut = lightOut = false;
+  if (!bcState.rearLightActive) return;
+  const bool wantFog = bcCfg.rvLightMode != BC_REAR_LIGHT_LIGHTS_ON;
+  const bool wantLight = bcCfg.rvLightMode != BC_REAR_LIGHT_FOG;
+  if (wantFog && bcState.vc273Valid &&
+      (uint32_t)(now - bcState.vc273Ms) <= BC_OVERRIDE_TEMPLATE_MAX_AGE_MS &&
+      (uint32_t)(now - bcState.fogLastTxMs) >= BC_OVERRIDE_REINFORCE_MS &&
+      !bcState.mirrorCmd.active && !bcState.frunkCmd.active) {
+    memcpy(fog, bcState.vc273Template, 8);
+    bcClearVc273TransientPure(fog);
+    bcSetRearFogPure(fog, true);
+    bcState.fogLastTxMs = now;
+    fogOut = true;
+  }
+  if (wantLight && bcState.vc3b3Valid &&
+      (uint32_t)(now - bcState.vc3b3Ms) <= BC_OVERRIDE_TEMPLATE_MAX_AGE_MS &&
+      (uint32_t)(now - bcState.lightLastTxMs) >= BC_OVERRIDE_REINFORCE_MS) {
+    memcpy(light, bcState.vc3b3Template, 8);
+    bcClearVc2TransientPure(light);
+    bcSetLightSwitchPure(light, BC_LIGHT_SWITCH_ON);
+    bcState.lightLastTxMs = now;
+    lightOut = true;
+  }
+  if (fogOut || lightOut) bcState.rearLightReinforced++;
 }
 
 static void bodyComfortObserveVehicleControl3(uint8_t bus, const uint8_t *d, uint8_t dlc, uint32_t now) {
@@ -498,7 +547,7 @@ static void bodyComfortObserve(uint8_t bus, uint16_t id, const uint8_t *d, uint8
     }
     case BC_ID_VCLEFT_SWITCH: bodyComfortObserveSwitch(bus, d, dlc, now); break;
     case BC_ID_UI_VEHICLE_CONTROL: bodyComfortObserveVehicleControl(bus, d, dlc, now); break;
-    case BC_ID_UI_VEHICLE_CONTROL2: bodyComfortObserveVehicleControl2(bus, d, dlc); break;
+    case BC_ID_UI_VEHICLE_CONTROL2: bodyComfortObserveVehicleControl2(bus, d, dlc, now); break;
     case BC_ID_UI_VEHICLE_CONTROL3: bodyComfortObserveVehicleControl3(bus, d, dlc, now); break;
     case BC_ID_VCFRONT_VEHICLE_STATUS: bodyComfortObserveVehicleStatus(bus, d, dlc); break;
     default: break;
@@ -1123,8 +1172,11 @@ static void bodyComfortServiceTick(uint32_t now) {
   bcEntryServiceLocked(now);
   uint8_t synth[8];
   const bool synthSend = bcWindowCommandServiceLocked(now, synth);
+  uint8_t fogFrame[8], lightFrame[8];
+  bool fogSend = false, lightSend = false;
   bcMirrorServiceLocked(now);
   bcHazardServiceLocked(now);
+  bcRearLightReinforceLocked(now, fogFrame, fogSend, lightFrame, lightSend);
   bcOneShotDoneLocked(now, bcState.frunkCmd, bcState.frunkOpens, bcState.frunkRefused);
   bool kdGearD = false;
   const uint8_t kdAction = bcKickdownServiceLocked(now, kdGearD);
@@ -1138,6 +1190,12 @@ static void bodyComfortServiceTick(uint32_t now) {
   }
   portEXIT_CRITICAL(&bcMux);
   if (synthSend) bodyComfortTransmit(bodyComfortActiveBus(), BC_ID_UI_VEHICLE_CONTROL3, synth, 8);
+  if (fogSend && !bodyComfortTransmit(bodyComfortActiveBus(), BC_ID_UI_VEHICLE_CONTROL, fogFrame, 8)) {
+    portENTER_CRITICAL(&bcMux); bcState.rearLightTxFail++; bcState.fogLastTxMs = now - BC_OVERRIDE_REINFORCE_MS; portEXIT_CRITICAL(&bcMux);
+  }
+  if (lightSend && !bodyComfortTransmit(bodyComfortActiveBus(), BC_ID_UI_VEHICLE_CONTROL2, lightFrame, 8)) {
+    portENTER_CRITICAL(&bcMux); bcState.rearLightTxFail++; bcState.lightLastTxMs = now - BC_OVERRIDE_REINFORCE_MS; portEXIT_CRITICAL(&bcMux);
+  }
   for (uint8_t i = 0; i < existingCount; ++i) {
     const char *r = bodyComfortToggleExistingFeature(existing[i]);
     portENTER_CRITICAL(&bcMux);
@@ -1399,6 +1457,8 @@ static String bodyComfortJson() {
   jw.u32("seatbeltInjected", s.seatbeltInjected);
   jw.u32("seatbeltBadChecksum", s.seatbeltBadChecksum);
   jw.u32("rearLightInjected", s.rearLightInjected);
+  jw.u32("rearLightReinforced", s.rearLightReinforced);
+  jw.u32("rearLightTxFail", s.rearLightTxFail);
   jw.u32("kickdownEngages", s.kickdownEngages);
   jw.u32("kickdownReleases", s.kickdownReleases);
   jw.u32("kickdownRefused", s.kickdownRefused);

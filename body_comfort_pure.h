@@ -472,6 +472,36 @@ static inline void bcSetRearFogPure(uint8_t *d, bool on) {
   bcSetBitsPure(d, 23, 1, on ? 1u : 0u);
 }
 
+// Rear-light reinforcement: while R holds a state override, the overridden copy
+// is re-sent from the newest stock frame between stock frames.
+static constexpr uint32_t BC_OVERRIDE_REINFORCE_MS = 40u;
+static constexpr uint32_t BC_OVERRIDE_TEMPLATE_MAX_AGE_MS = 300u;
+
+// One-shot request fields of 0x273 that must never be replayed from an older
+// stock frame: frunk (5), lock request (17|3), mirror fold (24|2), remote
+// start (27|3), remote closure (54|2), honk (61), drive state request (62).
+static inline void bcClearVc273TransientPure(uint8_t *d) {
+  if (d == nullptr) return;
+  bcSetBitsPure(d, 5, 1, 0u);
+  bcSetBitsPure(d, 17, 3, 0u);
+  bcSetBitsPure(d, 24, 2, 0u);
+  bcSetBitsPure(d, 27, 3, 0u);
+  bcSetBitsPure(d, 54, 2, 0u);
+  bcSetBitsPure(d, 61, 1, 0u);
+  bcSetBitsPure(d, 62, 1, 0u);
+}
+
+// One-shot request fields of 0x3B3: glovebox (0), trunk (1), alarm trigger
+// (13), BLE push notification (20), save tire config (60).
+static inline void bcClearVc2TransientPure(uint8_t *d) {
+  if (d == nullptr) return;
+  bcSetBitsPure(d, 0, 1, 0u);
+  bcSetBitsPure(d, 1, 1, 0u);
+  bcSetBitsPure(d, 13, 1, 0u);
+  bcSetBitsPure(d, 20, 1, 0u);
+  bcSetBitsPure(d, 60, 1, 0u);
+}
+
 static constexpr uint8_t BC_LIGHT_SWITCH_ON = 1u;  // 0 AUTO 1 ON 2 PARKING 3 OFF
 static inline void bcSetLightSwitchPure(uint8_t *d, uint8_t mode) {
   bcSetBitsPure(d, 9, 3, mode & 0x07u);
