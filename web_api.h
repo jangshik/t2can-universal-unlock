@@ -6117,6 +6117,7 @@ static void webTask(void *arg) {
     server.on("/api/body/config", HTTP_GET, httpBodyComfortConfig);
     server.on("/api/body/update", HTTP_POST, httpBodyComfortUpdate);
     server.on("/api/body/action", HTTP_POST, httpBodyComfortAction);
+    server.on("/api/body/window-test", HTTP_POST, httpBodyComfortWindowTest);
     server.on("/api/features/s3xy", HTTP_POST, httpFeatureS3xy);
     server.on("/api/das/stats", HTTP_GET, httpDasTelemetryStats);
     server.on("/api/r79/stats", HTTP_GET, httpR79Stats);

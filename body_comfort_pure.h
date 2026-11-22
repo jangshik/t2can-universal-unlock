@@ -839,7 +839,7 @@ static inline BodyComfortConfigPure bodyComfortDefaultsPure() {
   c.mcLongMs = 800u;
   c.mcGapMs = 400u;
   c.hzBlinkSeconds = 3u;
-  c.rvLightMode = BC_REAR_LIGHT_BOTH;
+  c.rvLightMode = BC_REAR_LIGHT_LIGHTS_ON;  // fog modes flicker on Juniper (field report)
   c.drOffDelayMs = 2000u;
   c.kdTriggerPct = 90u;
   c.kdTargetRaw = BC_KD_TARGET_STANDARD;

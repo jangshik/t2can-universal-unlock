@@ -141,6 +141,9 @@ struct BcStateRuntime {
   uint8_t lastWinRequest, lastWinMask, lastWinStock, lastWinSynth, lastWinOutcome;
   uint32_t lastWinMs;
   uint8_t winUnavail[BC_DOOR_COUNT], winStop[BC_DOOR_COUNT];
+  // Window requests seen in stock 0x294 (what the touchscreen itself sends).
+  uint8_t vc3Seen[4][8]; uint32_t vc3SeenMs[4]; uint8_t vc3SeenHead, vc3SeenCount;
+  uint32_t vc3WindowFrames;
 
   // Mirrors / camera.
   BcOneShotRuntime mirrorCmd;
@@ -448,6 +451,19 @@ static void bodyComfortObserveVehicleControl3(uint8_t bus, const uint8_t *d, uin
   bcState.vc3Ms = now;
   bcState.vc3Valid = true;
   bcState.vc3RxCount++;
+  if (bcGetBitsPure(d, 52, 3) != BC_WINREQ_IDLE) {
+    // Keep the last 4 distinct stock window requests for comparison.
+    const uint8_t last = (uint8_t)((bcState.vc3SeenHead + 3u) % 4u);
+    if (bcState.vc3SeenCount == 0u || memcmp(bcState.vc3Seen[last], d, 8) != 0) {
+      memcpy(bcState.vc3Seen[bcState.vc3SeenHead], d, 8);
+      bcState.vc3SeenMs[bcState.vc3SeenHead] = now;
+      bcState.vc3SeenHead = (uint8_t)((bcState.vc3SeenHead + 1u) % 4u);
+      if (bcState.vc3SeenCount < 4u) bcState.vc3SeenCount++;
+    } else {
+      bcState.vc3SeenMs[last] = now;
+    }
+    bcState.vc3WindowFrames++;
+  }
   BcOneShotRuntime &w = bcState.winCmd;
   if (w.active && w.framesLeft > 0u && (uint32_t)(now - w.startMs) <= BC_ONE_SHOT_TIMEOUT_MS) {
     bcState.winCmdStockSeen = true;
@@ -1412,6 +1428,26 @@ static String bodyComfortJson() {
       cmd += " · "; cmd += (unsigned long)((now - s.lastWinMs) / 1000u); cmd += " s ago";
     }
     jw.string("windowCmd", cmd);
+    // Touchscreen window requests seen on the bus, newest first.
+    String seen;
+    for (uint8_t k = 0; k < s.vc3SeenCount; ++k) {
+      const uint8_t idx = (uint8_t)((s.vc3SeenHead + 4u - 1u - k) % 4u);
+      const uint8_t *f = s.vc3Seen[idx];
+      if (k) seen += " | ";
+      seen += reqNames[bcGetBitsPure(f, 52, 3) <= 4u ? bcGetBitsPure(f, 52, 3) : 0u];
+      seen += ' ';
+      for (uint8_t i = 0; i < BC_DOOR_COUNT; ++i)
+        if (bcGetBitsPure(f, bcWindowRequestedBitPure(i), 1)) { seen += doorKeys[i]; seen += ' '; }
+      const int32_t raw6 = (int32_t)bcGetBitsPure(f, 42, 6);
+      seen += "pct "; seen += (long)(((raw6 & 0x20) ? raw6 - 64 : raw6) * 5);
+      seen += " · ";
+      char hex[24];
+      snprintf(hex, sizeof(hex), "%02X%02X%02X%02X%02X%02X%02X%02X", f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7]);
+      seen += hex;
+      seen += " · "; seen += (unsigned long)((now - s.vc3SeenMs[idx]) / 1000u); seen += " s ago";
+    }
+    jw.string("vc3Seen", seen.length() ? seen : String("none yet (press Vent / Close on the touchscreen)"));
+    jw.u32("vc3WindowFrames", s.vc3WindowFrames);
   }
   jw.string("mirrors", String("L:") + bcMirrorName(s.mirrorFold[0]) + " R:" + bcMirrorName(s.mirrorFold[1]));
   jw.boolean("mirrorFoldedByFeature", s.mirrorFoldedByUs);
@@ -1610,6 +1646,44 @@ static void httpBodyComfortUpdate() {
   }
   if (!next.mcEnabled) bcState.macroCount = 0;
   portEXIT_CRITICAL(&bcMux);
+  server.send(200, "application/json", bodyComfortJson());
+}
+
+// Manual window test (P only): one window command through the Easy Entry path.
+// POST /api/body/window-test?door=0..3&req=2|3|4  (2 VENT, 3 CLOSED, 4 OPEN)
+static void httpBodyComfortWindowTest() {
+  if (bodyComfortActiveBus() == BC_BUS_NONE) {
+    bcSendError(409, "Body Comfort requires Body + Chassis (Juniper) or Model Y L");
+    return;
+  }
+  uint32_t door = 0, req = 0;
+  bool present = false, present2 = false;
+  if (!bcParseUIntArg("door", 0u, 3u, door, present) || !present ||
+      !bcParseUIntArg("req", 2u, 4u, req, present2) || !present2) {
+    bcSendError(400, "door 0-3 and req 2 (vent), 3 (close), 4 (open) required");
+    return;
+  }
+  const uint32_t now = (uint32_t)millis();
+  const char *reason = nullptr;
+  portENTER_CRITICAL(&bcMux);
+  uint8_t gear = BC_GEAR_INVALID;
+  if (!bcGearFreshLocked(now, gear) || gear != BC_GEAR_P) reason = "window test only in P";
+  else if (bcState.winCmd.active) reason = "window command busy";
+  else {
+    uint8_t request = (uint8_t)req, pct = 0;
+    if (request == BC_WINREQ_OPEN && bcCfg.eeOpenPercent) { request = BC_WINREQ_PERCENT; pct = 100u; }
+    bcState.winCmdMask = (uint8_t)(1u << door);
+    bcState.winCmdRequest = request;
+    bcState.winCmdPct = pct;
+    bcState.winCmdStockSent = 0;
+    bcState.winCmdSynthSent = 0;
+    bcState.winCmdStockSeen = false;
+    bcState.winCmd.active = true;
+    bcState.winCmd.framesLeft = BC_WINDOW_CMD_FRAMES;
+    bcState.winCmd.startMs = now;
+  }
+  portEXIT_CRITICAL(&bcMux);
+  if (reason) { bcSendError(409, reason); return; }
   server.send(200, "application/json", bodyComfortJson());
 }
 

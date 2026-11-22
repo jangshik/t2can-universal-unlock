@@ -28,7 +28,10 @@ TEXT = {
         "wxs": "Block when weather is unknown", "wxsD": "Fail closed if the weather signal is missing.",
         "rd": "RESTORE DELAY (ms)",
         "eop": "Alternative open command", "eopD": "Send 'go to 100 %' instead of 'go to open'. Try this if the window does not move; check Window command below.",
-        "stVc3": "0x294 window request frame", "stWcmd": "Last window command", "stWdiag": "Window blocked / stop reason",
+        "stVc3": "0x294 window request frame",
+        "wt": "Window test (P only)", "wtD": "Sends one window command the same way Easy Entry does, without opening a door. Compare with the touchscreen requests in Live Status.",
+        "wtW": "Window", "wtOpen": "Open", "wtVent": "Vent", "wtClose": "Close",
+        "stSeen": "Touchscreen window requests", "stWcmd": "Last window command", "stWdiag": "Window blocked / stop reason",
         "mf": "Fold mirrors", "mfD": "Fold the side mirrors when Easy Entry acts.",
         "cam": "Camera while folded", "camD": "Show the camera view in D/N while this feature has the mirrors folded.",
         "uk": "UNFOLD ABOVE (km/h)", "uh": "FOR (s)",
@@ -70,7 +73,7 @@ TEXT = {
         "stKd": "Pedal · brake · kickdown", "stHd": "Door handles",
         "rh": "Reverse Hazards", "rhD": "Hazards on while in R, off again when leaving R.",
         "rl": "Reverse Rear Light", "rlD": "Turn the rear lights on while in R.",
-        "rlm": ["Rear fog", "Lights ON", "Rear fog + lights ON"], "mode": "Rear light mode",
+        "rlm": ["Rear fog (may flicker)", "Lights ON", "Rear fog + lights ON (may flicker)"], "mode": "Rear light mode",
         "dh": "Door-Open Hazards (D/R)", "dhD": "A door opened in D or R turns the hazards on until every door is closed again.",
         "dd": "OFF DELAY AFTER CLOSE (ms)",
         "save": "Save", "saving": "Saving…", "saved": "Saved", "failed": "Not saved",
@@ -103,7 +106,10 @@ TEXT = {
         "wxs": "天气未知时禁止", "wxsD": "天气信号缺失时不执行。",
         "rd": "恢复延迟 (ms)",
         "eop": "备用开窗指令", "eopD": "用“到 100 %”代替“打开”。如果车窗不动请试试，并查看下方的车窗指令。",
-        "stVc3": "0x294 车窗请求帧", "stWcmd": "最近的车窗指令", "stWdiag": "车窗受阻 / 停止原因",
+        "stVc3": "0x294 车窗请求帧",
+        "wt": "车窗测试（仅 P 挡）", "wtD": "按便捷上车相同方式发送一次车窗指令，无需开门。可与实时状态中的触摸屏请求对比。",
+        "wtW": "车窗", "wtOpen": "打开", "wtVent": "通风", "wtClose": "关闭",
+        "stSeen": "触摸屏车窗请求", "stWcmd": "最近的车窗指令", "stWdiag": "车窗受阻 / 停止原因",
         "mf": "折叠后视镜", "mfD": "便捷上车动作时折叠外后视镜。",
         "cam": "折叠时显示摄像头", "camD": "本功能折叠后视镜期间，在 D/N 挡显示摄像头画面。",
         "uk": "展开车速高于 (km/h)", "uh": "持续 (s)",
@@ -142,7 +148,7 @@ TEXT = {
         "stKd": "踏板 · 刹车 · Kickdown", "stHd": "车门把手",
         "rh": "倒车双闪", "rhD": "R 挡时开启双闪，离开 R 挡后关闭。",
         "rl": "倒车后灯", "rlD": "R 挡时开启后部灯光。",
-        "rlm": ["后雾灯", "灯光开启", "后雾灯 + 灯光开启"], "mode": "后灯模式",
+        "rlm": ["后雾灯（可能闪烁）", "灯光开启", "后雾灯 + 灯光开启（可能闪烁）"], "mode": "后灯模式",
         "dh": "开门双闪 (D/R)", "dhD": "在 D 或 R 挡打开车门时开启双闪，直到所有车门关闭。",
         "dd": "关门后熄灭延迟 (ms)",
         "save": "保存", "saving": "正在保存…", "saved": "已保存", "failed": "未保存",
@@ -219,7 +225,7 @@ function build(){
   const root=$b('bcBody');if(!root)return;
   const h=[];
   h.push(`<div class="softNote" id="bcSupport" hidden></div>`);
-  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcEop',T.eop,T.eopD)+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
+  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcEop',T.eop,T.eopD)+`<div class="listrow"><div><div class="listkey">${esc(T.wt)}</div><div class="listdesc">${esc(T.wtD)}</div></div>${sel('bcWtDoor',T.wtW,T.doors,'max-width:46%')}</div>`+btnRow(['bcWtOpen',T.wtOpen,0],['bcWtVent',T.wtVent,0],['bcWtClose',T.wtClose,0])+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
   h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
   let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
   m+=`<div class="softNote" style="padding:4px 16px 8px">${esc(T.collapsedHint)}</div>`;
@@ -231,7 +237,7 @@ function build(){
   h.push(lbl(T.dh),card(tg('bcDh',T.dh,T.dhD)+`<div class="fieldgrid">${num('bcDd',T.dd,0,10000)}</div>`+btnRow(['bcDhSave',T.save,1])));
   h.push(lbl(T.kd),card(tg('bcKd',T.kd,T.kdD)+`<div class="listrow"><div><div class="listkey">${esc(T.kdTgt)}</div></div>${sel('bcKdTgt',T.kdTgt,T.kdTgtO,'max-width:62%')}</div>`+`<div class="fieldgrid">${num('bcKdT',T.kdT,10,100)}</div>`+tg('bcKdRp',T.kdRp,T.kdRpD)+`<div class="fieldgrid">${num('bcKdR',T.kdR,0,90)}</div>`+tg('bcKdRb',T.kdRb,T.kdRbD)+`<div class="listrow"><div><div class="listkey">${esc(T.kdRm)}</div></div>${sel('bcKdRm',T.kdRm,T.kdRmO,'max-width:62%')}</div>`+btnRow(['bcKdSave',T.save,1])));
   h.push(lbl(T.hd),card(tg('bcHd',T.hd,T.hdD)+tg('bcHd0',T.hdDr,'')+tg('bcHd1',T.hdPs,'')+`<div class="fieldgrid">${num('bcHdS',T.hdS,1,10)}</div>`+btnRow(['bcHdSave',T.save,1])+`<div class="listrow"><div><div class="listkey">${esc(T.hdA)}</div></div>${macroSel('bcHdA',T.hdA)}</div>`));
-  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStWcmd',T.stWcmd)+stRow('bcStVc3',T.stVc3)+stRow('bcStWdiag',T.stWdiag)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStKd',T.stKd)+stRow('bcStHd',T.stHd)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
+  h.push(lbl(T.status),card(stRow('bcStBus',T.stBus)+stRow('bcStGear',T.stGear)+stRow('bcStWx',T.stWx)+stRow('bcStDoors',T.stDoors)+stRow('bcStWin',T.stWin)+stRow('bcStEe',T.stEe)+stRow('bcStWcmd',T.stWcmd)+stRow('bcStVc3',T.stVc3)+stRow('bcStWdiag',T.stWdiag)+stRow('bcStSeen',T.stSeen)+stRow('bcStMir',T.stMir)+stRow('bcStCam',T.stCam)+stRow('bcStHaz',T.stHaz)+stRow('bcStKd',T.stKd)+stRow('bcStHd',T.stHd)+stRow('bcStMacro',T.stMacro)+stRow('bcStCnt',T.stCnt)+btnRow(['bcFoldNow',T.foldNow,0],['bcCamNow',T.camNow,0])));
   h.push(`<div class="softNote" id="bcSaveState" aria-live="polite"></div>`);
   root.innerHTML=h.join('');
 }
@@ -260,7 +266,7 @@ function render(d){
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
   setText('bcStWx',l.weather||'—');setText('bcStDoors',l.doors||'—');setText('bcStWin',l.windows||'—');
-  setText('bcStEe',l.easyEntry||'—');setText('bcStWcmd',l.windowCmd||'—');setText('bcStVc3',l.vc3||'—');setText('bcStWdiag',l.windowsDiag||'—');setChk('bcEop',c.eeOpenPercent);setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
+  setText('bcStEe',l.easyEntry||'—');setText('bcStWcmd',l.windowCmd||'—');setText('bcStVc3',l.vc3||'—');setText('bcStWdiag',l.windowsDiag||'—');setText('bcStSeen',l.vc3Seen||'—');setChk('bcEop',c.eeOpenPercent);setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
   setText('bcStCam',l.camera||'—');
   setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
   setText('bcStMacro',s.macroEvents?`${T.btn[s.lastMacroButton]||'?'} · ${T.ges[s.lastMacroGesture]||'?'} → ${T.act[s.lastMacroAction]||T.notSet} · ${s.lastMacroResult||'—'}`:'—');
@@ -320,7 +326,9 @@ if(lo)lo.onchange=async()=>{const want=lo.checked;loBusy=true;lo.disabled=true;s
   finally{lo.disabled=false}};
 setTimeout(fetchListenOnly,1800);
 async function action(id){try{render(await featurePostJson('/api/body/action?id='+id));setText('bcSaveState','')}catch(e){setText('bcSaveState',T.failed+' · '+(e.message||e))}}
-onClick('bcHbRun',()=>action(8));onClick('bcFoldNow',()=>action(9));onClick('bcCamNow',()=>action(10));
+onClick('bcHbRun',()=>action(8));
+async function windowTest(req){const door=$b('bcWtDoor')?.value||'0';try{render(await featurePostJson(`/api/body/window-test?door=${door}&req=${req}`));setText('bcSaveState','')}catch(e){setText('bcSaveState',T.failed+' · '+(e.message||e))}}
+onClick('bcWtOpen',()=>windowTest(4));onClick('bcWtVent',()=>windowTest(2));onClick('bcWtClose',()=>windowTest(3));onClick('bcFoldNow',()=>action(9));onClick('bcCamNow',()=>action(10));
 // Wi-Fi timing (Wireless panel).
 function renderWifi(d){if(!d||d.ok===false)return;wt=d;setChk('wifiSlowToggle',d.slowStartEnabled);setChk('wifiHideToggle',d.hideEnabled);setVal('wifiStartDelay',d.startDelayS);setVal('wifiHideDelay',d.hideDelayS);const hd=$b('wifiHideDesc');if(hd)hd.textContent=T.wifiHideD+(d.hiddenNow?' · '+T.on:'')}
 async function fetchWifiTiming(){try{renderWifi(await jget('/api/wifi/timing'))}catch(e){}}

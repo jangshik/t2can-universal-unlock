@@ -1110,6 +1110,46 @@ static void testRearLightReinforcement() {
   assert(takeTx(0x273).empty() && takeTx(0x3B3).empty());
 }
 
+static void testWindowCaptureAndManualTest() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  setCfg(c);
+  run(500);
+  // Touchscreen sends a VENT for all four windows once.
+  uint8_t d[8] = {};
+  d[0] = 0x40;
+  bcComposeWindowRequestPure(d, 0x0Fu, BC_WINREQ_VENT, 0);
+  bodyComfortObserve(BC_BUS_A, 0x294, d, 8);
+  bodyComfortObserve(BC_BUS_A, 0x294, d, 8);  // repeated frame is not duplicated
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("\"vc3Seen\":\"VENT FL FR RL RR pct 0 · ") != std::string::npos);
+  assert(bcState.vc3SeenCount == 1 && bcState.vc3WindowFrames == 2);
+  // Manual test: open RL in P.
+  g_tx.clear();
+  server.args = {{"door", "2"}, {"req", "4"}};
+  httpBodyComfortWindowTest();
+  assert(server.lastCode == 200);
+  run(700);
+  auto w = takeTx(0x294);
+  assert(w.size() == BC_WINDOW_CMD_FRAMES && bcGetBitsPure(w[0].data, 48, 4) == 0x4u);
+  assert(bcGetBitsPure(w[0].data, 52, 3) == BC_WINREQ_OPEN);
+  assert(bcState.lastWinOutcome == BC_WIN_OUTCOME_SENT);
+  // Validation and gating.
+  server.args = {{"door", "5"}, {"req", "4"}};
+  httpBodyComfortWindowTest();
+  assert(server.lastCode == 400);
+  server.args = {{"door", "0"}, {"req", "1"}};
+  httpBodyComfortWindowTest();
+  assert(server.lastCode == 400);
+  car.gear = BC_GEAR_D;
+  run(300);
+  server.args = {{"door", "0"}, {"req", "3"}};
+  httpBodyComfortWindowTest();
+  assert(server.lastCode == 409);
+  // Default rear-light mode is Lights ON.
+  assert(bodyComfortDefaultsPure().rvLightMode == BC_REAR_LIGHT_LIGHTS_ON);
+}
+
 int main() {
   bodyComfortStart();
   assert(bodyComfortTaskHandle != nullptr);
@@ -1129,6 +1169,7 @@ int main() {
   testListenOnly();
   testWindowDelivery();
   testRearLightReinforcement();
+  testWindowCaptureAndManualTest();
   std::puts("body_comfort_runtime host: all tests passed");
   return 0;
 }

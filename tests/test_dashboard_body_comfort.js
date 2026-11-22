@@ -6,7 +6,7 @@ const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
 const root=path.resolve(__dirname,'..');
 
 function firmware(){
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:2,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:1,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
   const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
   const state={cfg,wifi,supported:true,failNext:0,actions:[]};
@@ -44,6 +44,7 @@ async function check(html,label,zh=false){
         if(request.method()==='POST'){if(fw.failListen){status=503;body={ok:false,error:'CAN mode change not confirmed'}}else{fw.listenOnly=url.searchParams.get('enabled')==='1';body={ok:true,listenOnly:fw.listenOnly}}}
         else body={ok:true,listenOnly:!!fw.listenOnly};
       }
+      else if(url.pathname==='/api/body/window-test'){fw.windowTests=(fw.windowTests||[]);fw.windowTests.push(url.search);body=fw.json()}
       else if(url.pathname==='/api/body/action'){fw.actions.push(url.searchParams.get('id'));body=fw.json()}
       else if(url.pathname==='/api/wifi/timing'){
         if(request.method()==='POST'){for(const[k,v]of url.searchParams)fw.wifi[k]=k.endsWith('Enabled')?v==='1':Number(v)}
@@ -87,6 +88,11 @@ async function check(html,label,zh=false){
     await page.waitForTimeout(80);
     assert.equal(fw.cfg.eeOpenPercent,true);
     assert.equal(await page.locator('#bcStWcmd').count(),1);
+    await page.evaluate(()=>{const s=document.getElementById('bcWtDoor');s.value='2';s.dispatchEvent(new Event('change',{bubbles:true}))});
+    await page.locator('#bcWtVent').click();
+    await page.waitForTimeout(80);
+    assert.deepEqual(fw.windowTests,['?door=2&req=2']);
+    assert.equal(await page.locator('#bcStSeen').count(),1);
     // Door mask: front-right off.
     await page.locator('#bcDoor1').locator('xpath=..').click();
     await page.waitForFunction(()=>!document.getElementById('bcDoor1').checked);
