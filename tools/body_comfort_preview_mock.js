@@ -4,15 +4,15 @@
 (()=>{
   const base=window.fetch;
   const json=(v,status=200)=>Promise.resolve(new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}}));
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:1,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
-  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,eeMirrorCooldownS:60,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:1,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],eeMirrorCooldownS:[0,600],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:0,setupMode:false};
   const wifiStart=Date.now();
   const DOORS=['FL','FR','RL','RR'];
   const legacy={};
   let lastMacro={button:0,gesture:0,action:0,result:''};
   const car={gear:'P',kph:0,door:[false,false,false,false],win:[0,0,0,0],rain:false,snow:false,mirrors:'UNFOLDED',camera:false,hazard:'OFF',belts:[false,false,false],pedal:0,brake:false,handle:[false,false],frunk:false,pedalMode:'Comfort (Chill)',listenOnly:false,locked:false,log:[]};
-  const st={entry:['IDLE','IDLE','IDLE','IDLE'],saved:[0,0,0,0],foldedByUs:false,cameraByUs:false,unfoldSince:0,hazardOwned:false,userHazard:false,blinkUntil:0,doorHazUntil:0,doorHazActive:false,rearLight:false};
+  const st={entry:['IDLE','IDLE','IDLE','IDLE'],saved:[0,0,0,0],foldedByUs:false,byEntry:false,doorUnfoldAt:0,cooldownUntil:0,cameraByUs:false,unfoldSince:0,hazardOwned:false,userHazard:false,blinkUntil:0,doorHazUntil:0,doorHazActive:false,rearLight:false};
   const stats={txOk:0,txFail:0,entryOpens:0,entryRestores:0,entryBlockedWeather:0,entryBlockedGear:0,seatbeltInjected:0,macroEvents:0,hazardPresses:0,blinkRuns:0,mirrorFolds:0,mirrorUnfolds:0,cameraPresses:0};
   const log=msg=>{car.log.unshift(new Date().toLocaleTimeString()+'  '+msg);car.log.length=Math.min(car.log.length,12);window.__bcPreviewRender?.()};
   const tx=(what)=>{if(car.listenOnly){log('(listen-only, not sent) '+what);return}stats.txOk++;log('TX '+what)};
@@ -27,19 +27,27 @@
     if(!want)st.userHazard=false;
   }
   function doorOpened(i){
+    if(i===0)st.doorUnfoldAt=0;
     if(cfg.drHazard&&(car.gear==='D'||car.gear==='R')){st.doorHazActive=true;st.doorHazUntil=0}
     if(!cfg.eeEnabled||!((cfg.eeDoorMask>>i)&1))return;
     if(car.gear!=='P'){stats.entryBlockedGear++;log(`Easy Entry ${DOORS[i]} blocked: gear ${car.gear}`);return}
     if(cfg.eeWeatherBlock&&(car.rain||car.snow)){stats.entryBlockedWeather++;log(`Easy Entry ${DOORS[i]} blocked: ${car.rain?'rain':'snow'}`);return}
     if(car.win[i]>=100)return;
     st.saved[i]=car.win[i];st.entry[i]='OPENED';stats.entryOpens++;setWindow(i,100,'Easy Entry');
-    if(cfg.eeMirrorFold&&car.mirrors==='UNFOLDED'&&!st.foldedByUs){car.mirrors='FOLDED';st.foldedByUs=true;stats.mirrorFolds++;tx('0x273 UI_mirrorFoldRequest=RETRACT')}
+    if(cfg.eeMirrorFold&&!st.foldedByUs&&cfg.eeMirrorCooldownS>0&&Date.now()<st.cooldownUntil){log(`Mirror fold skipped: cooldown ${Math.ceil((st.cooldownUntil-Date.now())/1000)} s`);return}
+    if(cfg.eeMirrorFold&&car.mirrors==='UNFOLDED'&&!st.foldedByUs){car.mirrors='FOLDED';st.foldedByUs=true;st.byEntry=true;stats.mirrorFolds++;tx('0x273 UI_mirrorFoldRequest=RETRACT')}
+  }
+  function mirrorUnfold(why){
+    if(st.byEntry)st.cooldownUntil=Date.now()+cfg.eeMirrorCooldownS*1000;
+    car.mirrors='UNFOLDED';st.foldedByUs=false;st.byEntry=false;st.doorUnfoldAt=0;st.unfoldSince=0;stats.mirrorUnfolds++;tx('0x273 UI_mirrorFoldRequest=PRESENT'+(why?' · '+why:''));
+    if(st.cameraByUs&&car.camera){car.camera=false;stats.cameraPresses++;tx('0x3C2 mux1 camera button press (close)')}st.cameraByUs=false;
   }
   function doorClosed(i){
     if(st.entry[i]==='OPENED'){
       st.entry[i]='RESTORING';
       setTimeout(()=>{if(st.entry[i]!=='RESTORING'||car.door[i])return;st.entry[i]='IDLE';stats.entryRestores++;setWindow(i,st.saved[i],'restore');},cfg.eeRestoreDelayMs);
     }
+    if(i===0&&st.foldedByUs&&st.byEntry)st.doorUnfoldAt=Date.now()+2000;
     if(st.doorHazActive&&!car.door.some(Boolean))st.doorHazUntil=Date.now()+cfg.drOffDelayMs;
   }
   const kd={kicked:false,belowSince:0};const hd=[{since:0,fired:false},{since:0,fired:false}];
@@ -67,9 +75,10 @@
     if(st.doorHazActive&&st.doorHazUntil&&now>=st.doorHazUntil&&!car.door.some(Boolean)){st.doorHazActive=false;st.doorHazUntil=0}
     if(!cfg.drHazard)st.doorHazActive=false;
     st.rearLight=cfg.rvLight&&car.gear==='R';
+    if(st.foldedByUs&&st.doorUnfoldAt&&now>=st.doorUnfoldAt)mirrorUnfold('driver door closed 2 s');
     if(st.foldedByUs){
       if(cfg.eeMirrorCamera&&(car.gear==='D'||car.gear==='N')&&!car.camera&&!st.cameraByUs){car.camera=true;st.cameraByUs=true;stats.cameraPresses++;tx('0x3C2 mux1 camera button press')}
-      if(car.gear==='D'&&car.kph>cfg.eeUnfoldKph){if(!st.unfoldSince)st.unfoldSince=now;if(now-st.unfoldSince>=cfg.eeUnfoldHoldS*1000){car.mirrors='UNFOLDED';st.foldedByUs=false;st.unfoldSince=0;stats.mirrorUnfolds++;tx('0x273 UI_mirrorFoldRequest=PRESENT');if(st.cameraByUs&&car.camera){car.camera=false;stats.cameraPresses++;tx('0x3C2 mux1 camera button press (close)')}st.cameraByUs=false}}
+      if(car.gear==='D'&&car.kph>cfg.eeUnfoldKph){if(!st.unfoldSince)st.unfoldSince=now;if(now-st.unfoldSince>=cfg.eeUnfoldHoldS*1000)mirrorUnfold('speed')}
       else st.unfoldSince=0;
     }
     if(cfg.sbEnabled)car.belts.forEach((u,s)=>{if(u&&((cfg.sbSeatMask>>s)&1))stats.seatbeltInjected++});
@@ -83,7 +92,7 @@
     if(existing[a]){legacy[a]=!legacy[a];log(`Macro: ${existing[a]} → ${legacy[a]?'ON':'OFF'} (기존 기능)`);return null}
     if(toggles[a]){cfg[toggles[a]]=!cfg[toggles[a]];log(`Macro: ${toggles[a]} → ${cfg[toggles[a]]?'ON':'OFF'}`);return null}
     if(a===8){if(!cfg.hzBlinkEnabled)return'hazard blink disabled';if(car.hazard!=='OFF')return'hazards already on';st.blinkUntil=Date.now()+cfg.hzBlinkSeconds*1000;stats.blinkRuns++;log(`Hazard blink ${cfg.hzBlinkSeconds}s`);return null}
-    if(a===9){if(car.mirrors==='FOLDED'){car.mirrors='UNFOLDED';st.foldedByUs=false;tx('0x273 UI_mirrorFoldRequest=PRESENT')}else{car.mirrors='FOLDED';st.foldedByUs=true;tx('0x273 UI_mirrorFoldRequest=RETRACT')}return null}
+    if(a===9){if(car.mirrors==='FOLDED')mirrorUnfold('macro');else{car.mirrors='FOLDED';st.foldedByUs=true;st.byEntry=false;st.doorUnfoldAt=0;tx('0x273 UI_mirrorFoldRequest=RETRACT')}return null}
     if(a===10){car.camera=!car.camera;stats.cameraPresses++;tx('0x3C2 mux1 camera button press');return null}
     if(a===20){if(car.gear!=='P')return'frunk only opens in P';car.frunk=true;tx('0x273 UI_frunkRequest=MOVE (frunk open)');return null}
     if(a===21){car.listenOnly=!car.listenOnly;log('Listen-only → '+(car.listenOnly?'ON':'OFF'));return null}

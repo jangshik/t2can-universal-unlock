@@ -6,9 +6,9 @@ const {launchBrowser,dashboardArtifacts}=require('./browser_test_runtime');
 const root=path.resolve(__dirname,'..');
 
 function firmware(){
-  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:1,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
+  const cfg={eeEnabled:false,eeDoorMask:15,eeWeatherBlock:true,eeWeatherStrict:false,eeRestoreDelayMs:800,eeOpenPercent:false,eeMirrorFold:false,eeMirrorCamera:true,eeUnfoldKph:10,eeUnfoldHoldS:3,eeMirrorCooldownS:60,sbEnabled:false,sbSeatMask:7,mcEnabled:false,mcLongMs:800,mcGapMs:400,mcAction:[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],hzBlinkEnabled:false,hzBlinkSeconds:3,rvHazard:false,rvLight:false,rvLightMode:1,drHazard:false,drOffDelayMs:2000,kdEnabled:false,kdTriggerPct:90,kdTargetRaw:1,kdReleaseOnPedal:true,kdReleasePct:20,kdReleaseOnBrake:true,kdReleaseMode:0,dhEnabled:false,dhDoorMask:1,dhHoldS:2,dhAction:20};
   const wifi={ok:true,slowStartEnabled:false,startDelayS:30,hideEnabled:false,hideDelayS:300,hiddenNow:false,startDelayAppliedS:0,apUptimeS:12,setupMode:false};
-  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
+  const ranges={eeDoorMask:[0,15],eeRestoreDelayMs:[0,5000],eeUnfoldKph:[1,80],eeUnfoldHoldS:[0,30],eeMirrorCooldownS:[0,600],sbSeatMask:[0,7],mcLongMs:[500,2000],mcGapMs:[200,800],hzBlinkSeconds:[1,30],rvLightMode:[0,2],drOffDelayMs:[0,10000],kdTriggerPct:[10,100],kdTargetRaw:[1,2],kdReleasePct:[0,90],kdReleaseMode:[0,1],dhDoorMask:[0,3],dhHoldS:[1,10],dhAction:[0,22]};
   const state={cfg,wifi,supported:true,failNext:0,actions:[]};
   state.json=()=>({ok:true,supported:state.supported,bus:state.supported?'BODY_CAN_A':'NONE',layout:state.supported?'JUNIPER_VEH':'NONE',taskRunning:true,cfg:JSON.parse(JSON.stringify(cfg)),live:{gear:'P',speedKph:0,weather:'CLEAR',doors:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',windows:'FL:CLOSED FR:CLOSED RL:CLOSED RR:CLOSED',easyEntry:'FL:IDLE FR:IDLE RL:IDLE RR:IDLE',mirrors:'L:UNFOLDED R:UNFOLDED',mirrorFoldedByFeature:false,camera:'OFF',hazard:'OFF',hazardOwned:false,blinkActive:false,reverseHazard:false,doorHazard:false,rearLight:false},stats:{txOk:4,txFail:0,entryOpens:1,entryRestores:1,entryBlockedWeather:0,seatbeltInjected:0,macroEvents:0}});
   state.update=params=>{
@@ -158,7 +158,7 @@ async function check(html,label,zh=false){
     await page.locator('#bcUk').fill('20');
     await page.locator('#bcEeSave').click();
     await page.waitForFunction(()=>document.getElementById('bcSaveState').textContent.length>0&&!document.getElementById('bcRd').dataset.dirty);
-    assert(requests.includes('POST /api/body/update?eeRestoreDelayMs=1500&eeUnfoldKph=20&eeUnfoldHoldS=3'),requests.join('\n'));
+    assert(requests.includes('POST /api/body/update?eeRestoreDelayMs=1500&eeUnfoldKph=20&eeUnfoldHoldS=3&eeMirrorCooldownS=60'),requests.join('\n'));
     assert.equal(fw.cfg.eeRestoreDelayMs,1500);
     // Polling never overwrites a field being edited.
     await page.locator('#bcDd').fill('4500');

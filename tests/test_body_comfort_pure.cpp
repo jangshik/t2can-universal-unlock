@@ -397,6 +397,7 @@ static void testConfigBlob() {
   c.rvLightMode = BC_REAR_LIGHT_FOG;
   c.drOffDelayMs = 4500;
   c.eeOpenPercent = true;
+  c.eeMirrorCooldownS = 345;
   uint8_t blob[BC_CFG_BLOB_LEN];
   bodyComfortSerializePure(c, blob);
   BodyComfortConfigPure r = {};
@@ -406,7 +407,17 @@ static void testConfigBlob() {
   assert(r.sbEnabled && r.sbSeatMask == 0x02 && r.mcEnabled && r.rvLight);
   assert(r.rvLightMode == BC_REAR_LIGHT_FOG && r.drOffDelayMs == 4500 && r.eeWeatherBlock);
   assert(r.eeOpenPercent);
-  assert(BC_CFG_BLOB_LEN == 50u && blob[0] == 3u);
+  assert(r.eeMirrorCooldownS == 345);
+  assert(BC_CFG_BLOB_LEN == 52u && blob[0] == 4u);
+  // v3 (50-byte) blobs migrate; the mirror cooldown takes its default.
+  uint8_t v3[BC_CFG_BLOB_LEN_V3];
+  memcpy(v3, blob, BC_CFG_BLOB_LEN_V3 - 1u);
+  v3[0] = 3u;
+  v3[BC_CFG_BLOB_LEN_V3 - 1u] = bcCfgBlobChecksumLenPure(v3, BC_CFG_BLOB_LEN_V3);
+  BodyComfortConfigPure m3 = {};
+  assert(bodyComfortDeserializePure(v3, BC_CFG_BLOB_LEN_V3, m3));
+  assert(m3.eeEnabled && m3.eeOpenPercent && m3.eeMirrorCooldownS == 60u);
+  assert(memcmp(&m3.mcAction, &c.mcAction, sizeof(c.mcAction)) == 0);
   // v1 (36-byte, six wheel controls) blobs still load; voice/camera start empty.
   uint8_t v1[BC_CFG_BLOB_LEN_V1];
   memcpy(v1, blob, BC_CFG_BLOB_LEN_V1 - 1u);
@@ -429,7 +440,9 @@ static void testConfigBlob() {
   BodyComfortConfigPure bad = bodyComfortDefaultsPure();
   bad.eeRestoreDelayMs = 60000; bad.eeUnfoldKph = 0; bad.mcLongMs = 10; bad.mcGapMs = 9000;
   bad.hzBlinkSeconds = 0; bad.rvLightMode = 9; bad.eeDoorMask = 0xFF; bad.mcAction[0][0] = 200;
+  bad.eeMirrorCooldownS = 9999;
   bodyComfortSanitizePure(bad);
+  assert(bad.eeMirrorCooldownS == 600);
   assert(bad.eeRestoreDelayMs == 5000 && bad.eeUnfoldKph == 1 && bad.mcLongMs == 500);
   assert(bad.mcGapMs == 800 && bad.hzBlinkSeconds == 1 && bad.rvLightMode == BC_REAR_LIGHT_BOTH);
   assert(bad.eeDoorMask == 0x0F && bad.mcAction[0][0] == BC_ACTION_NONE);

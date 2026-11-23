@@ -37,6 +37,7 @@
 - 운전석 창문 스위치를 조작하면 해당 창문의 자동 복구를 취소합니다(사용자 우선).
 - **사이드미러 접기(선택)**: Easy Entry가 동작할 때 `UI_mirrorFoldRequest=RETRACT`.
   - Easy Entry로 접힌 경우 **운전석 문이 닫히고 2초 뒤** `PRESENT`로 펼칩니다(기어 무관, 2초 안에 다시 열면 취소). 매크로/대시보드로 접은 미러에는 적용하지 않습니다.
+  - **재접힘 휴지시간**(기본 60 s, 0–600, 0 = 끔): Easy Entry가 접은 미러가 펴진 뒤 이 시간 동안 Easy Entry는 미러를 다시 접지 않습니다(창문은 그대로 동작).
   - 보조: 이 기능으로 접힌 경우에만 **D단 + 설정 속도 초과(기본 10 km/h) + 설정 시간(기본 3 s) 지속** 시 `PRESENT`로 펼칩니다. 운전자가 직접 접은 미러는 절대 펼치지 않습니다. 운전자가 직접 펼치면 소유권을 해제합니다.
   - **접힌 동안 카메라 화면(선택)**: D/N단에서 `UI_cameraActive`가 꺼져 있으면 스티어링 카메라 버튼(0x3C2 mux1 `swcCameraButtonState`)을 한 번 누릅니다(최대 2회). 미러를 펼친 뒤 이 기능이 연 카메라는 다시 닫습니다.
 
@@ -104,7 +105,7 @@
 ## API
 
 - `GET /api/body/config` — 설정 + 실시간 상태(`live`) + 카운터(`stats`).
-- `POST /api/body/update?<key>=<value>...` — 부분 업데이트. 키: `eeEnabled, eeDoorMask(0-15), eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs(0-5000), eeMirrorFold, eeMirrorCamera, eeUnfoldKph(1-80), eeUnfoldHoldS(0-30), sbEnabled, sbSeatMask(0-7), mcEnabled, mcLongMs(500-2000), mcGapMs(200-800), mc=<button>,<gesture>,<action>, hzBlinkEnabled, hzBlinkSeconds(1-30), rvHazard, rvLight, rvLightMode(0 fog/1 lights/2 both), drHazard, drOffDelayMs(0-10000)`. 범위 밖 값은 400, 미지원 토폴로지는 409.
+- `POST /api/body/update?<key>=<value>...` — 부분 업데이트. 키: `eeEnabled, eeDoorMask(0-15), eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs(0-5000), eeMirrorFold, eeMirrorCamera, eeUnfoldKph(1-80), eeUnfoldHoldS(0-30), eeMirrorCooldownS(0-600), sbEnabled, sbSeatMask(0-7), mcEnabled, mcLongMs(500-2000), mcGapMs(200-800), mc=<button>,<gesture>,<action>, hzBlinkEnabled, hzBlinkSeconds(1-30), rvHazard, rvLight, rvLightMode(0 fog/1 lights/2 both), drHazard, drOffDelayMs(0-10000)`. 범위 밖 값은 400, 미지원 토폴로지는 409.
 - `POST /api/body/action?id=8|9|10` — 비상등 점멸 / 미러 접기·펴기 / 카메라, `id=11…19` 기존 기능 토글.
 - `GET|POST /api/wifi/timing` — `slowStartEnabled, startDelayS(0-600), hideEnabled, hideDelayS(0-3600)`.
 - NVS: `bodycmf/cfg`(버전 2 + 체크섬 42바이트 blob, 이전 36바이트 v1도 읽음, 손상 시 기본값). Reset Feature Settings가 `bodycmf`를 지웁니다.

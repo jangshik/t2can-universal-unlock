@@ -34,7 +34,8 @@ TEXT = {
         "stSeen": "Touchscreen window requests", "stWcmd": "Last window command", "stWdiag": "Window blocked / stop reason",
         "mf": "Fold mirrors", "mfD": "Fold the side mirrors when Easy Entry acts. Mirrors folded this way unfold 2 s after the driver door closes.",
         "cam": "Camera while folded", "camD": "Show the camera view in D/N while this feature has the mirrors folded.",
-        "uk": "UNFOLD ABOVE (km/h)", "uh": "FOR (s)",
+        "uk": "UNFOLD ABOVE (km/h)", "uh": "FOR (s)", "mcd": "REFOLD COOLDOWN (s)",
+        "mcdD": "After mirrors folded by Easy Entry unfold, Easy Entry does not fold them again for this long (0 = off). The window still drops.",
         "ufD": "Fallback: if the driver door never closes, mirrors folded by this feature unfold in D after the speed stays above this value for this time. Mirrors you fold yourself are never unfolded.",
         "sb": "Rear Seat-Belt Chime Off", "sbD": "Suppress the unbuckled chime for the selected 2nd-row seats.",
         "seats": ["2nd row left", "2nd row centre", "2nd row right"],
@@ -112,7 +113,8 @@ TEXT = {
         "stSeen": "触摸屏车窗请求", "stWcmd": "最近的车窗指令", "stWdiag": "车窗受阻 / 停止原因",
         "mf": "折叠后视镜", "mfD": "便捷上车动作时折叠外后视镜。以此方式折叠的后视镜在驾驶员车门关闭 2 秒后展开。",
         "cam": "折叠时显示摄像头", "camD": "本功能折叠后视镜期间，在 D/N 挡显示摄像头画面。",
-        "uk": "展开车速高于 (km/h)", "uh": "持续 (s)",
+        "uk": "展开车速高于 (km/h)", "uh": "持续 (s)", "mcd": "再次折叠冷却 (s)",
+        "mcdD": "由便捷上车折叠的后视镜展开后，在此时间内便捷上车不会再次折叠（0 = 关闭）。车窗仍会下降。",
         "ufD": "备用：若驾驶员车门未关闭，由本功能折叠的后视镜在 D 挡车速持续高于设定值达到设定时间后展开。您自己折叠的后视镜不会被展开。",
         "sb": "关闭后排安全带提示音", "sbD": "对所选第二排座椅关闭未系安全带提示音。",
         "seats": ["第二排左", "第二排中", "第二排右"],
@@ -225,7 +227,7 @@ function build(){
   const root=$b('bcBody');if(!root)return;
   const h=[];
   h.push(`<div class="softNote" id="bcSupport" hidden></div>`);
-  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcEop',T.eop,T.eopD)+`<div class="listrow"><div><div class="listkey">${esc(T.wt)}</div><div class="listdesc">${esc(T.wtD)}</div></div>${sel('bcWtDoor',T.wtW,T.doors,'max-width:46%')}</div>`+btnRow(['bcWtOpen',T.wtOpen,0],['bcWtVent',T.wtVent,0],['bcWtClose',T.wtClose,0])+tg('bcMf',T.mf,T.mfD)+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
+  h.push(lbl(T.ee),card(tg('bcEe',T.ee,T.eeD)+T.doors.map((d,i)=>tg('bcDoor'+i,d,'')).join('')+tg('bcWx',T.wx,T.wxD)+tg('bcWxs',T.wxs,T.wxsD)+`<div class="fieldgrid">${num('bcRd',T.rd,0,5000)}</div>`+tg('bcEop',T.eop,T.eopD)+`<div class="listrow"><div><div class="listkey">${esc(T.wt)}</div><div class="listdesc">${esc(T.wtD)}</div></div>${sel('bcWtDoor',T.wtW,T.doors,'max-width:46%')}</div>`+btnRow(['bcWtOpen',T.wtOpen,0],['bcWtVent',T.wtVent,0],['bcWtClose',T.wtClose,0])+tg('bcMf',T.mf,T.mfD)+`<div class="fieldgrid">${num('bcMcd',T.mcd,0,600)}</div><div class="softNote">${esc(T.mcdD)}</div>`+tg('bcCam',T.cam,T.camD)+`<div class="fieldgrid">${num('bcUk',T.uk,1,80)}${num('bcUh',T.uh,0,30)}</div><div class="softNote">${esc(T.ufD)}</div>`+btnRow(['bcEeSave',T.save,1])));
   h.push(lbl(T.sb),card(tg('bcSb',T.sb,T.sbD)+T.seats.map((s,i)=>tg('bcSeat'+i,s,'')).join('')));
   let m=tg('bcMc',T.mc,T.mcD)+`<div class="fieldgrid">${num('bcLp',T.lp,500,2000)}${num('bcGp',T.gp,200,800)}</div>`+btnRow(['bcMcSave',T.save,1]);
   m+=`<div class="softNote" style="padding:4px 16px 8px">${esc(T.collapsedHint)}</div>`;
@@ -251,7 +253,7 @@ function render(d){
   $b('bcBody')?.querySelectorAll('input,select,button').forEach(e=>{e.disabled=!d.supported});
   setChk('bcEe',c.eeEnabled);for(let i=0;i<4;i++)setChk('bcDoor'+i,(c.eeDoorMask>>i)&1);
   setChk('bcWx',c.eeWeatherBlock);setChk('bcWxs',c.eeWeatherStrict);setVal('bcRd',c.eeRestoreDelayMs);
-  setChk('bcMf',c.eeMirrorFold);setChk('bcCam',c.eeMirrorCamera);setVal('bcUk',c.eeUnfoldKph);setVal('bcUh',c.eeUnfoldHoldS);
+  setChk('bcMf',c.eeMirrorFold);setChk('bcCam',c.eeMirrorCamera);setVal('bcUk',c.eeUnfoldKph);setVal('bcUh',c.eeUnfoldHoldS);setVal('bcMcd',c.eeMirrorCooldownS);
   setChk('bcSb',c.sbEnabled);for(let i=0;i<3;i++)setChk('bcSeat'+i,(c.sbSeatMask>>i)&1);
   setChk('bcMc',c.mcEnabled);setVal('bcLp',c.mcLongMs);setVal('bcGp',c.mcGapMs);
   (c.mcAction||[]).forEach((row,bi)=>row.forEach((a,gi)=>setVal(`bcM${bi}_${gi}`,a)));
@@ -266,7 +268,7 @@ function render(d){
   setText('bcStBus',d.bus+(d.layout?' · '+d.layout:''));
   setText('bcStGear',(l.gear||'?')+' · '+(l.speedKph==null?'—':l.speedKph+' km/h'));
   setText('bcStWx',l.weather||'—');setText('bcStDoors',l.doors||'—');setText('bcStWin',l.windows||'—');
-  setText('bcStEe',l.easyEntry||'—');setText('bcStWcmd',l.windowCmd||'—');setText('bcStVc3',l.vc3||'—');setText('bcStWdiag',l.windowsDiag||'—');setText('bcStSeen',l.vc3Seen||'—');setChk('bcEop',c.eeOpenPercent);setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?' · FEATURE':''));
+  setText('bcStEe',l.easyEntry||'—');setText('bcStWcmd',l.windowCmd||'—');setText('bcStVc3',l.vc3||'—');setText('bcStWdiag',l.windowsDiag||'—');setText('bcStSeen',l.vc3Seen||'—');setChk('bcEop',c.eeOpenPercent);setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?(l.mirrorFoldedByEntry?' · EASY ENTRY':' · FEATURE'):'')+(l.mirrorDoorUnfoldPending?' · UNFOLD 2 s':'')+(l.mirrorCooldownLeftS>0?' · COOLDOWN '+l.mirrorCooldownLeftS+' s':''));
   setText('bcStCam',l.camera||'—');
   setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
   setText('bcStMacro',s.macroEvents?`${T.btn[s.lastMacroButton]||'?'} · ${T.ges[s.lastMacroGesture]||'?'} → ${T.act[s.lastMacroAction]||T.notSet} · ${s.lastMacroResult||'—'}`:'—');
@@ -306,7 +308,7 @@ $b('bcBody')?.addEventListener('input',e=>{if(e.target.type==='number')e.target.
 function readNums(map){const out={};for(const[id,key]of map){const e=$b(id),v=Number(e?.value);if(!e||e.value===''||!Number.isInteger(v)||v<Number(e.min)||v>Number(e.max)){e?.focus();setText('bcSaveState',T.failed+' · '+key);return null}out[key]=v}return out}
 async function saveNums(map){const p=readNums(map);if(!p)return;if(await save(p))map.forEach(([id])=>{const e=$b(id);if(e)delete e.dataset.dirty});}
 const onClick=(id,fn)=>{const e=$b(id);if(e)e.onclick=fn};
-onClick('bcEeSave',()=>saveNums([['bcRd','eeRestoreDelayMs'],['bcUk','eeUnfoldKph'],['bcUh','eeUnfoldHoldS']]));
+onClick('bcEeSave',()=>saveNums([['bcRd','eeRestoreDelayMs'],['bcUk','eeUnfoldKph'],['bcUh','eeUnfoldHoldS'],['bcMcd','eeMirrorCooldownS']]));
 onClick('bcMcSave',()=>saveNums([['bcLp','mcLongMs'],['bcGp','mcGapMs']]));
 onClick('bcHbSave',()=>saveNums([['bcHc','hzBlinkSeconds']]));
 onClick('bcDhSave',()=>saveNums([['bcDd','drOffDelayMs']]));

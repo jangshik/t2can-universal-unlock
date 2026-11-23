@@ -584,6 +584,69 @@ static void testMirrorDriverDoorUnfold() {
   assert(takeTx(0x273).empty() && bcState.mirrorFoldedByUs && bcState.mirrorDoorUnfolds == 0);
 }
 
+static void testMirrorCooldown() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.eeEnabled = true;
+  c.eeMirrorFold = true;
+  c.eeMirrorCooldownS = 5;
+  setCfg(c);
+  run(2000);
+  car.latch[BC_DOOR_FL] = 1;
+  run(400);
+  assert(!takeTx(0x273).empty());
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_FOLDED;
+  car.latch[BC_DOOR_FL] = 2;
+  run(2400);  // unfolded 2 s after the close: cooldown starts
+  auto m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m.back().data, 24, 2) == BC_MIRROR_REQ_PRESENT);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_UNFOLDED;
+  g_tx.clear();
+  // Another door within the cooldown: the window still drops, the mirrors stay out.
+  const uint32_t opensBefore = bcState.entryOpens;
+  car.latch[BC_DOOR_FR] = 1;
+  run(600);
+  assert(bcState.entryOpens == opensBefore + 1u);
+  assert(takeTx(0x273).empty() && bcState.mirrorFoldSkippedCooldown == 1u);
+  assert(!bcState.mirrorFoldedByUs);
+  server.args = {};
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("\"mirrorCooldownLeftS\":") != std::string::npos);
+  assert(server.lastBody.find("\"mirrorCooldownLeftS\":0,") == std::string::npos);
+  car.latch[BC_DOOR_FR] = 2;
+  run(4000);  // cooldown over
+  car.latch[BC_DOOR_RL] = 1;
+  run(400);
+  m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT);
+  assert(bcState.mirrorFoldedByEntry);
+
+  // Cooldown 0: folds again right away.
+  resetAll();
+  c.eeMirrorCooldownS = 0;
+  setCfg(c);
+  run(2000);
+  car.latch[BC_DOOR_FL] = 1;
+  run(400);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_FOLDED;
+  car.latch[BC_DOOR_FL] = 2;
+  run(2400);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_UNFOLDED;
+  g_tx.clear();
+  car.latch[BC_DOOR_FR] = 1;
+  run(400);
+  m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT);
+  assert(bcState.mirrorFoldSkippedCooldown == 0u);
+  server.args = {{"eeMirrorCooldownS", "601"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 400 && bcCfg.eeMirrorCooldownS == 0u);
+  server.args = {{"eeMirrorCooldownS", "120"}};
+  httpBodyComfortUpdate();
+  assert(server.lastCode == 200 && bcCfg.eeMirrorCooldownS == 120u);
+  assert(server.lastBody.find("\"eeMirrorCooldownS\":120") != std::string::npos);
+}
+
 static void testSeatbelt() {
   resetAll();
   BodyComfortConfigPure c = bodyComfortDefaultsPure();
@@ -1229,6 +1292,7 @@ int main() {
   testEasyEntryBlocked();
   testMirrorFoldCameraUnfold();
   testMirrorDriverDoorUnfold();
+  testMirrorCooldown();
   testSeatbelt();
   testReverseHazardAndLight();
   testDoorHazard();

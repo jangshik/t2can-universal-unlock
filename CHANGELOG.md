@@ -4,6 +4,7 @@
 - add_feats: Body Comfort for HW4 Model Y Juniper (also Model Y L), every feature OFF by default and individually switchable: Easy Entry (window drop in P, restore on close, rain/snow block, optional mirror fold with camera view and speed-gated unfold), per-seat 2nd-row seat-belt chime suppression, steering-wheel double/triple/long-press macros, hazard N-blink, reverse hazards, reverse rear light, D/R door-open hazards. See BODY_COMFORT.md.
 - add_feats: Kickdown (pedal-threshold Standard/Sport with pedal and/or brake release), door-handle hold macro (driver/passenger, default open frunk in P), dashboard Listen-Only toggle (existing hardware passive mode), macros for voice/camera buttons and existing-feature toggles, Hazard Blink for N seconds.
 - add_feats: Easy Entry mirrors unfold 2 s after the driver door closes (only mirrors Easy Entry folded; reopening within 2 s cancels). Macro/dashboard folds are not affected; the D + speed unfold stays as a fallback.
+- add_feats: Easy Entry mirror refold cooldown (default 60 s, 0-600, 0 = off): after an Easy Entry fold is undone, Easy Entry does not fold the mirrors again until it ends; the window still drops. Config blob v4 (52 bytes), v3/v2/v1 migrate.
 - add_feats: Wi-Fi AP slow start (delayed AP start, CAN/BLE unaffected) and hidden SSID after a delay. Setup mode always starts visible and immediately.
 # T2CAN Universal v3.30.2
 - Added Model S/X MCU2 HW3 profile, tested on model S 2017 HW3 and on model S 2017 HW2.5, (for HW2.5 use TSL9 mode for nag)

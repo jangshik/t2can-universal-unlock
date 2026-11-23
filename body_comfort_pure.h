@@ -788,6 +788,7 @@ struct BodyComfortConfigPure {
   bool eeMirrorCamera;       // show the camera while mirrors are folded by us
   uint8_t eeUnfoldKph;       // unfold above this speed in D ...
   uint8_t eeUnfoldHoldS;     // ... for at least this long
+  uint16_t eeMirrorCooldownS; // after an Easy Entry fold is undone, no new fold for this long (0 off)
   // 2) Rear seat-belt chime
   bool sbEnabled;
   uint8_t sbSeatMask;        // bit0 2nd-row left, bit1 centre, bit2 right
@@ -835,6 +836,7 @@ static inline BodyComfortConfigPure bodyComfortDefaultsPure() {
   c.eeMirrorCamera = true;
   c.eeUnfoldKph = 10u;
   c.eeUnfoldHoldS = 3u;
+  c.eeMirrorCooldownS = 60u;
   c.sbSeatMask = 0x07u;
   c.mcLongMs = 800u;
   c.mcGapMs = 400u;
@@ -861,6 +863,7 @@ static inline void bodyComfortSanitizePure(BodyComfortConfigPure &c) {
   c.eeRestoreDelayMs = bcClampPure<uint16_t>(c.eeRestoreDelayMs, 0u, 5000u);
   c.eeUnfoldKph = bcClampPure<uint8_t>(c.eeUnfoldKph, 1u, 80u);
   c.eeUnfoldHoldS = bcClampPure<uint8_t>(c.eeUnfoldHoldS, 0u, 30u);
+  c.eeMirrorCooldownS = bcClampPure<uint16_t>(c.eeMirrorCooldownS, 0u, 600u);
   c.sbSeatMask &= 0x07u;
   c.mcLongMs = bcClampPure<uint16_t>(c.mcLongMs, 500u, 2000u);
   c.mcGapMs = bcClampPure<uint16_t>(c.mcGapMs, 200u, 800u);
@@ -885,12 +888,16 @@ static inline void bodyComfortSanitizePure(BodyComfortConfigPure &c) {
 
 // v1: 36 bytes, six wheel controls. v2: 42 bytes, adds voice + camera buttons.
 // v3: 50 bytes, adds kickdown and the door-handle macro after the macro table.
-static constexpr uint8_t BC_CFG_BLOB_VERSION = 3u;
+// v4: 52 bytes, adds the Easy Entry mirror cooldown.
+static constexpr uint8_t BC_CFG_BLOB_VERSION = 4u;
 static constexpr uint8_t BC_CFG_BLOB_LEN_V1 = 17u + BC_BTN_COUNT_V1 * BC_GESTURE_COUNT + 1u;
 static constexpr uint8_t BC_CFG_BLOB_LEN_V2 = 17u + (uint8_t)BC_BTN_COUNT * (uint8_t)BC_GESTURE_COUNT + 1u;
 static constexpr uint8_t BC_CFG_BLOB_V3_EXTRA = 8u;
-static constexpr uint8_t BC_CFG_BLOB_LEN = BC_CFG_BLOB_LEN_V2 + BC_CFG_BLOB_V3_EXTRA;
-static_assert(BC_CFG_BLOB_LEN_V1 == 36u && BC_CFG_BLOB_LEN_V2 == 42u && BC_CFG_BLOB_LEN == 50u,
+static constexpr uint8_t BC_CFG_BLOB_LEN_V3 = BC_CFG_BLOB_LEN_V2 + BC_CFG_BLOB_V3_EXTRA;
+static constexpr uint8_t BC_CFG_BLOB_V4_EXTRA = 2u;
+static constexpr uint8_t BC_CFG_BLOB_LEN = BC_CFG_BLOB_LEN_V3 + BC_CFG_BLOB_V4_EXTRA;
+static_assert(BC_CFG_BLOB_LEN_V1 == 36u && BC_CFG_BLOB_LEN_V2 == 42u && BC_CFG_BLOB_LEN_V3 == 50u &&
+                  BC_CFG_BLOB_LEN == 52u,
               "config blob layout");
 
 static inline uint8_t bcCfgBlobChecksumLenPure(const uint8_t *b, uint8_t len) {
@@ -939,6 +946,8 @@ static inline void bodyComfortSerializePure(const BodyComfortConfigPure &c,
   out[i++] = c.dhDoorMask;
   out[i++] = c.dhHoldS;
   out[i++] = c.dhAction;
+  out[i++] = (uint8_t)(c.eeMirrorCooldownS & 0xFFu);
+  out[i++] = (uint8_t)(c.eeMirrorCooldownS >> 8);
   out[BC_CFG_BLOB_LEN - 1u] = bcCfgBlobChecksumPure(out);
 }
 
@@ -947,8 +956,12 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
   c = bodyComfortDefaultsPure();
   if (in == nullptr) return false;
   uint8_t buttons = 0;
-  bool hasV3 = false;
-  if (len == BC_CFG_BLOB_LEN && in[0] == BC_CFG_BLOB_VERSION) { buttons = BC_BTN_COUNT; hasV3 = true; }
+  bool hasV3 = false, hasV4 = false;
+  if (len == BC_CFG_BLOB_LEN && in[0] == BC_CFG_BLOB_VERSION) {
+    buttons = BC_BTN_COUNT; hasV3 = true; hasV4 = true;
+  } else if (len == BC_CFG_BLOB_LEN_V3 && in[0] == 3u) {  // migrate v3
+    buttons = BC_BTN_COUNT; hasV3 = true;
+  }
   else if (len == BC_CFG_BLOB_LEN_V2 && in[0] == 2u) buttons = BC_BTN_COUNT;      // migrate v2
   else if (len == BC_CFG_BLOB_LEN_V1 && in[0] == 1u) buttons = BC_BTN_COUNT_V1;  // migrate v1
   if (buttons == 0u || bcCfgBlobChecksumLenPure(in, (uint8_t)len) != in[len - 1u]) return false;
@@ -989,6 +1002,7 @@ static inline bool bodyComfortDeserializePure(const uint8_t *in, uint32_t len,
     c.dhDoorMask = in[i + 5u];
     c.dhHoldS = in[i + 6u];
     c.dhAction = in[i + 7u];
+    if (hasV4) c.eeMirrorCooldownS = (uint16_t)(in[i + 8u] | (in[i + 9u] << 8));
   }
   bodyComfortSanitizePure(c);
   return true;

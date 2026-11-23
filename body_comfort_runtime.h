@@ -155,6 +155,9 @@ struct BcStateRuntime {
   uint32_t mirrorUnfoldDueMs;
   uint8_t mirrorDriverDoorLast;
   uint32_t mirrorDoorUnfolds;
+  bool mirrorCooldownActive;    // an Easy Entry fold was undone: no new fold until ...
+  uint32_t mirrorCooldownUntilMs;
+  uint32_t mirrorFoldSkippedCooldown;
   uint32_t mirrorFoldMs;
   BcUnfoldTimerPure unfoldTimer;
   bool cameraOpenedByUs;
@@ -230,7 +233,8 @@ static void bodyComfortCfgLoad() {
   if (p.begin(BC_NVS_NAMESPACE, true)) {
     uint8_t blob[BC_CFG_BLOB_LEN] = {};
     const size_t len = p.getBytesLength(BC_NVS_KEY);
-    if ((len == BC_CFG_BLOB_LEN || len == BC_CFG_BLOB_LEN_V1) &&
+    if ((len == BC_CFG_BLOB_LEN || len == BC_CFG_BLOB_LEN_V3 || len == BC_CFG_BLOB_LEN_V2 ||
+         len == BC_CFG_BLOB_LEN_V1) &&
         p.getBytes(BC_NVS_KEY, blob, len) == len) {
       if (!bodyComfortDeserializePure(blob, (uint32_t)len, c)) c = bodyComfortDefaultsPure();
     }
@@ -618,7 +622,25 @@ static bool bcCameraPressStartLocked(uint32_t now) {
   return true;
 }
 
+// An Easy Entry fold has been undone (unfolded by us, by a macro, or by the
+// driver): Easy Entry does not fold again for eeMirrorCooldownS.
+static void bcEntryMirrorReleasedLocked(uint32_t now) {
+  if (!bcState.mirrorFoldedByUs || !bcState.mirrorFoldedByEntry) return;
+  bcState.mirrorCooldownActive = true;
+  bcState.mirrorCooldownUntilMs = now + (uint32_t)bcCfg.eeMirrorCooldownS * 1000u;
+}
+
+static bool bcEntryMirrorCooldownLocked(uint32_t now) {
+  if (!bcState.mirrorCooldownActive) return false;
+  if (bcCfg.eeMirrorCooldownS == 0u || (int32_t)(bcState.mirrorCooldownUntilMs - now) <= 0) {
+    bcState.mirrorCooldownActive = false;
+    return false;
+  }
+  return true;
+}
+
 static void bcMirrorCommandLocked(uint32_t now, uint8_t request) {
+  if (request == BC_MIRROR_REQ_PRESENT) bcEntryMirrorReleasedLocked(now);
   bcState.mirrorCmd.active = true;
   bcState.mirrorCmd.framesLeft = BC_ONE_SHOT_FRAMES;
   bcState.mirrorCmd.startMs = now;
@@ -862,6 +884,9 @@ static void bcEntryServiceLocked(uint32_t now) {
   }
 
   if (foldRequested && bcCfg.eeMirrorFold && !bcState.mirrorFoldedByUs &&
+      bcEntryMirrorCooldownLocked(now)) {
+    bcState.mirrorFoldSkippedCooldown++;
+  } else if (foldRequested && bcCfg.eeMirrorFold && !bcState.mirrorFoldedByUs &&
       !bcState.mirrorCmd.active &&
       bcState.mirrorFold[0] != BC_MIRROR_FOLDED && bcState.mirrorFold[1] != BC_MIRROR_FOLDED) {
     bcMirrorCommandLocked(now, BC_MIRROR_REQ_RETRACT);
@@ -1034,6 +1059,7 @@ static void bcMirrorServiceLocked(uint32_t now) {
     if (doorsFresh && bcState.mirrorFold[0] == BC_MIRROR_UNFOLDED &&
         bcState.mirrorFold[1] == BC_MIRROR_UNFOLDED &&
         (uint32_t)(now - bcState.mirrorFoldMs) > BC_MIRROR_USER_UNFOLD_GRACE_MS) {
+      bcEntryMirrorReleasedLocked(now);
       bcState.mirrorFoldedByUs = false;
       bcState.mirrorFoldedByEntry = false;
       bcState.mirrorUnfoldPending = false;
@@ -1364,6 +1390,7 @@ static String bodyComfortJson() {
   jw.boolean("eeMirrorCamera", c.eeMirrorCamera);
   jw.u32("eeUnfoldKph", c.eeUnfoldKph);
   jw.u32("eeUnfoldHoldS", c.eeUnfoldHoldS);
+  jw.u32("eeMirrorCooldownS", c.eeMirrorCooldownS);
   jw.boolean("sbEnabled", c.sbEnabled);
   jw.u32("sbSeatMask", c.sbSeatMask);
   jw.boolean("mcEnabled", c.mcEnabled);
@@ -1494,6 +1521,9 @@ static String bodyComfortJson() {
   jw.boolean("mirrorFoldedByFeature", s.mirrorFoldedByUs);
   jw.boolean("mirrorFoldedByEntry", s.mirrorFoldedByUs && s.mirrorFoldedByEntry);
   jw.boolean("mirrorDoorUnfoldPending", s.mirrorUnfoldPending);
+  jw.u32("mirrorCooldownLeftS",
+         c.eeMirrorCooldownS > 0u && s.mirrorCooldownActive && (int32_t)(s.mirrorCooldownUntilMs - now) > 0
+             ? (s.mirrorCooldownUntilMs - now + 999u) / 1000u : 0u);
   jw.string("camera", cameraFresh ? (s.cameraActive ? "ON" : "OFF") : "?");
   jw.string("hazard", !lightingFresh ? "?" : s.hazardReq == 0u ? "OFF"
                       : s.hazardReq == BC_HAZARD_REQ_BUTTON ? "ON" : "OTHER");
@@ -1530,6 +1560,7 @@ static String bodyComfortJson() {
   jw.u32("mirrorFolds", s.mirrorFolds);
   jw.u32("mirrorUnfolds", s.mirrorUnfolds);
   jw.u32("mirrorDoorUnfolds", s.mirrorDoorUnfolds);
+  jw.u32("mirrorFoldSkippedCooldown", s.mirrorFoldSkippedCooldown);
   jw.u32("mirrorTimeouts", s.mirrorCmdTimeouts);
   jw.u32("cameraPresses", s.cameraPresses);
   jw.u32("hazardPresses", s.hazardPresses);
@@ -1615,6 +1646,7 @@ static void httpBodyComfortUpdate() {
   BC_BOOL_FIELD("eeWeatherBlock", eeWeatherBlock)
   BC_BOOL_FIELD("eeWeatherStrict", eeWeatherStrict)
   BC_UINT_FIELD("eeRestoreDelayMs", 0u, 5000u, eeRestoreDelayMs, uint16_t)
+  BC_UINT_FIELD("eeMirrorCooldownS", 0u, 600u, eeMirrorCooldownS, uint16_t)
   BC_BOOL_FIELD("eeOpenPercent", eeOpenPercent)
   BC_BOOL_FIELD("eeMirrorFold", eeMirrorFold)
   BC_BOOL_FIELD("eeMirrorCamera", eeMirrorCamera)

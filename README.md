@@ -153,6 +153,7 @@ https://discord.gg/euPbYG8Npc
 - **취소**: 창문이 열려 있거나 복구를 기다리는 중에 운전석 창문 스위치 팩에서 그 창문을 조작하면 자동 복구를 취소합니다.
 - **미러 접기(선택)**: Easy Entry가 동작할 때 미러가 접혀 있지 않으면 RETRACT를 보내고 "Easy Entry가 접음" 표시를 남깁니다.
   - **운전석 문 닫힘 후 2초 펴기 (2026-11-23)**: 이 표시가 있을 때 운전석 문(0x102 `frontLatchStatus` 14\|4)이 OPEN→CLOSED로 바뀌면 2초 뒤 PRESENT를 보냅니다. 기어와 무관(P에서도 동작)하고, 2초 안에 운전석 문이 다시 열리면 취소되며 다음 닫힘에서 다시 2초를 셉니다.
+  - **재접힘 휴지시간 (2026-11-23)**: Easy Entry가 접은 미러가 다시 펴지면(운전석 문 닫힘, 속도 조건, 매크로, 운전자가 직접 펼침 모두 포함) 그 시점부터 설정 시간(0–600 s, 기본 60 s, 0 = 끔) 동안 Easy Entry는 미러를 다시 접지 않습니다. 창문 내림은 그대로 동작합니다. 문을 여러 번 여닫을 때 미러가 계속 접혔다 펴지는 것을 막습니다.
   - **Easy Entry가 접은 미러만** 이렇게 펴집니다. 핸들 매크로/대시보드의 "미러 접기/펴기"로 접은 미러, 운전자가 접은 미러는 운전석 문으로 펴지 않습니다.
   - 보조 조건: 운전석 문이 닫히는 일이 없을 때(예: 운전석 문이 닫힌 채 조수석 문으로 접힘)는 기존처럼 **D단 + 속도가 설정값(1–80, 기본 10 km/h) 초과 + 그 상태가 설정 시간(0–30, 기본 3초) 연속**이면 PRESENT를 보냅니다.
   - 운전자가 접은 미러는 절대 펴지 않습니다. 접은 지 8초 뒤 양쪽이 모두 UNFOLDED로 보이면 운전자가 직접 편 것으로 보고 표시를 지웁니다.
@@ -234,11 +235,11 @@ https://discord.gg/euPbYG8Npc
 ### API / 저장
 
 - `GET /api/body/config` — 설정(`cfg`), 실시간 상태(`live`), 카운터(`stats`).
-- `POST /api/body/update` — 키: `eeEnabled, eeDoorMask, eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs, eeMirrorFold, eeMirrorCamera, eeUnfoldKph, eeUnfoldHoldS, sbEnabled, sbSeatMask, mcEnabled, mcLongMs, mcGapMs, mc=<버튼>,<제스처>,<동작>, hzBlinkEnabled, hzBlinkSeconds, rvHazard, rvLight, rvLightMode, drHazard, drOffDelayMs, kdEnabled, kdTriggerPct(10-100), kdTargetRaw(1-2), kdReleaseOnPedal, kdReleasePct(0-90), kdReleaseOnBrake, kdReleaseMode(0 Comfort/1 stock), dhEnabled, dhDoorMask(bit0 운전석, bit1 조수석), dhHoldS(1-10), dhAction`.
+- `POST /api/body/update` — 키: `eeEnabled, eeDoorMask, eeWeatherBlock, eeWeatherStrict, eeRestoreDelayMs, eeMirrorFold, eeMirrorCamera, eeUnfoldKph, eeUnfoldHoldS, eeMirrorCooldownS(0-600), sbEnabled, sbSeatMask, mcEnabled, mcLongMs, mcGapMs, mc=<버튼>,<제스처>,<동작>, hzBlinkEnabled, hzBlinkSeconds, rvHazard, rvLight, rvLightMode, drHazard, drOffDelayMs, kdEnabled, kdTriggerPct(10-100), kdTargetRaw(1-2), kdReleaseOnPedal, kdReleasePct(0-90), kdReleaseOnBrake, kdReleaseMode(0 Comfort/1 stock), dhEnabled, dhDoorMask(bit0 운전석, bit1 조수석), dhHoldS(1-10), dhAction`.
   - 범위를 벗어나면 400, 미지원 토폴로지는 409를 돌려줍니다.
 - `POST /api/body/action?id=…` — 동작 즉시 실행: 8 비상등 점멸, 9 미러 접기/펴기, 10 카메라, 11–19 기존 기능 토글, 20 프렁크 열기, 21 Listen-Only 토글, 22 킥다운 토글(id 4는 거부).
 - `GET|POST /api/wifi/timing` — 키: `slowStartEnabled, startDelayS, hideEnabled, hideDelayS`.
-- 설정은 NVS `bodycmf/cfg`에 저장합니다(50바이트, 버전 3 + 체크섬). 이전 36바이트(v1)·42바이트(v2) 설정도 그대로 읽어 매크로를 유지하고, 새 항목(킥다운·도어 핸들)은 기본값(OFF)으로 시작합니다. 손상되면 기본값(전부 OFF)으로 돌아가고, Reset Feature Settings로도 지워집니다.
+- 설정은 NVS `bodycmf/cfg`에 저장합니다(52바이트, 버전 4 + 체크섬). 이전 36바이트(v1)·42바이트(v2)·50바이트(v3) 설정도 그대로 읽어 매크로를 유지하고, 새 항목(킥다운·도어 핸들은 OFF, 미러 휴지시간은 60 s)은 기본값으로 시작합니다. 손상되면 기본값(전부 OFF)으로 돌아가고, Reset Feature Settings로도 지워집니다.
 
 ### 추가·변경된 파일
 
