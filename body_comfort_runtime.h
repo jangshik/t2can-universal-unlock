@@ -49,6 +49,7 @@ static constexpr uint8_t BC_MACRO_QUEUE_LEN = 4u;
 static constexpr uint8_t BC_CAMERA_MAX_ATTEMPTS = 2u;
 static constexpr uint32_t BC_CAMERA_RETRY_MS = 3000u;
 static constexpr uint32_t BC_MIRROR_USER_UNFOLD_GRACE_MS = 8000u;
+static constexpr uint32_t BC_MIRROR_DOOR_UNFOLD_MS = 2000u;       // Easy Entry fold: unfold after driver door closes
 
 enum BcEntryPhaseRuntime : uint8_t {
   BC_ENTRY_IDLE = 0,
@@ -149,6 +150,11 @@ struct BcStateRuntime {
   BcOneShotRuntime mirrorCmd;
   uint8_t mirrorCmdRequest;
   bool mirrorFoldedByUs;
+  bool mirrorFoldedByEntry;     // the current fold came from Easy Entry
+  bool mirrorUnfoldPending;     // driver door closed: unfold at mirrorUnfoldDueMs
+  uint32_t mirrorUnfoldDueMs;
+  uint8_t mirrorDriverDoorLast;
+  uint32_t mirrorDoorUnfolds;
   uint32_t mirrorFoldMs;
   BcUnfoldTimerPure unfoldTimer;
   bool cameraOpenedByUs;
@@ -617,6 +623,8 @@ static void bcMirrorCommandLocked(uint32_t now, uint8_t request) {
   bcState.mirrorCmd.framesLeft = BC_ONE_SHOT_FRAMES;
   bcState.mirrorCmd.startMs = now;
   bcState.mirrorCmdRequest = request;
+  bcState.mirrorFoldedByEntry = false;  // Easy Entry sets it right after its own fold
+  bcState.mirrorUnfoldPending = false;
   if (request == BC_MIRROR_REQ_RETRACT) {
     bcState.mirrorFoldedByUs = true;
     bcState.mirrorFoldMs = now;
@@ -855,8 +863,10 @@ static void bcEntryServiceLocked(uint32_t now) {
 
   if (foldRequested && bcCfg.eeMirrorFold && !bcState.mirrorFoldedByUs &&
       !bcState.mirrorCmd.active &&
-      bcState.mirrorFold[0] != BC_MIRROR_FOLDED && bcState.mirrorFold[1] != BC_MIRROR_FOLDED)
+      bcState.mirrorFold[0] != BC_MIRROR_FOLDED && bcState.mirrorFold[1] != BC_MIRROR_FOLDED) {
     bcMirrorCommandLocked(now, BC_MIRROR_REQ_RETRACT);
+    bcState.mirrorFoldedByEntry = true;
+  }
 }
 
 enum BcWinOutcomeRuntime : uint8_t {
@@ -979,7 +989,36 @@ static void bcMirrorServiceLocked(uint32_t now) {
       else bcState.mirrorUnfolds++;
     } else {
       bcState.mirrorCmdTimeouts++;
-      if (retract) bcState.mirrorFoldedByUs = false;
+      if (retract) {
+        bcState.mirrorFoldedByUs = false;
+        bcState.mirrorFoldedByEntry = false;
+        bcState.mirrorUnfoldPending = false;
+      }
+    }
+  }
+  // Easy Entry folds only: unfold BC_MIRROR_DOOR_UNFOLD_MS after the driver
+  // door closes. Reopening the driver door before then cancels it.
+  {
+    const uint8_t fl = bcDoorFreshLocked(now, BC_DOOR_FL) ? bcState.door[BC_DOOR_FL]
+                                                          : (uint8_t)BC_DOOR_STATE_UNKNOWN;
+    const bool flClosedEdge =
+        bcState.mirrorDriverDoorLast == BC_DOOR_STATE_OPEN && fl == BC_DOOR_STATE_CLOSED;
+    const bool flOpenedEdge =
+        bcState.mirrorDriverDoorLast == BC_DOOR_STATE_CLOSED && fl == BC_DOOR_STATE_OPEN;
+    if (fl != BC_DOOR_STATE_UNKNOWN) bcState.mirrorDriverDoorLast = fl;
+    if (!bcState.mirrorFoldedByUs || !bcState.mirrorFoldedByEntry) {
+      bcState.mirrorUnfoldPending = false;
+    } else if (flOpenedEdge) {
+      bcState.mirrorUnfoldPending = false;
+    } else if (flClosedEdge) {
+      bcState.mirrorUnfoldPending = true;
+      bcState.mirrorUnfoldDueMs = now + BC_MIRROR_DOOR_UNFOLD_MS;
+    }
+    if (bcState.mirrorUnfoldPending && !m.active &&
+        (int32_t)(now - bcState.mirrorUnfoldDueMs) >= 0) {
+      bcState.mirrorDoorUnfolds++;
+      bcMirrorCommandLocked(now, BC_MIRROR_REQ_PRESENT);
+      return;
     }
   }
   uint8_t gear = BC_GEAR_INVALID;
@@ -996,6 +1035,8 @@ static void bcMirrorServiceLocked(uint32_t now) {
         bcState.mirrorFold[1] == BC_MIRROR_UNFOLDED &&
         (uint32_t)(now - bcState.mirrorFoldMs) > BC_MIRROR_USER_UNFOLD_GRACE_MS) {
       bcState.mirrorFoldedByUs = false;
+      bcState.mirrorFoldedByEntry = false;
+      bcState.mirrorUnfoldPending = false;
       bcState.closeCameraAfterUnfold = bcState.cameraOpenedByUs;
       bcState.unfoldTimer = {};
     } else {
@@ -1451,6 +1492,8 @@ static String bodyComfortJson() {
   }
   jw.string("mirrors", String("L:") + bcMirrorName(s.mirrorFold[0]) + " R:" + bcMirrorName(s.mirrorFold[1]));
   jw.boolean("mirrorFoldedByFeature", s.mirrorFoldedByUs);
+  jw.boolean("mirrorFoldedByEntry", s.mirrorFoldedByUs && s.mirrorFoldedByEntry);
+  jw.boolean("mirrorDoorUnfoldPending", s.mirrorUnfoldPending);
   jw.string("camera", cameraFresh ? (s.cameraActive ? "ON" : "OFF") : "?");
   jw.string("hazard", !lightingFresh ? "?" : s.hazardReq == 0u ? "OFF"
                       : s.hazardReq == BC_HAZARD_REQ_BUTTON ? "ON" : "OTHER");
@@ -1486,6 +1529,7 @@ static String bodyComfortJson() {
   jw.u32("windowTimeouts", s.winCmdTimeouts);
   jw.u32("mirrorFolds", s.mirrorFolds);
   jw.u32("mirrorUnfolds", s.mirrorUnfolds);
+  jw.u32("mirrorDoorUnfolds", s.mirrorDoorUnfolds);
   jw.u32("mirrorTimeouts", s.mirrorCmdTimeouts);
   jw.u32("cameraPresses", s.cameraPresses);
   jw.u32("hazardPresses", s.hazardPresses);

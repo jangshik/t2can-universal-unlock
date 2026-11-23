@@ -467,14 +467,15 @@ static void testMirrorFoldCameraUnfold() {
   c.eeMirrorFold = true;
   setCfg(c);
   run(2000);
-  car.latch[BC_DOOR_FL] = 1;
+  // Passenger door: the driver door never closes, so the speed fallback unfolds.
+  car.latch[BC_DOOR_FR] = 1;
   run(400);
   auto m = takeTx(0x273);
   assert(m.size() == BC_ONE_SHOT_FRAMES);
   assert(bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT && m[0].data[2] == 0x11);
-  assert(bcState.mirrorFoldedByUs && bcState.mirrorFolds == 1);
+  assert(bcState.mirrorFoldedByUs && bcState.mirrorFoldedByEntry && bcState.mirrorFolds == 1);
   car.mirror[0] = car.mirror[1] = BC_MIRROR_FOLDED;
-  car.latch[BC_DOOR_FL] = 2;
+  car.latch[BC_DOOR_FR] = 2;
   run(2000);
   g_tx.clear();
   // D: camera button pressed once while folded.
@@ -512,6 +513,75 @@ static void testMirrorFoldCameraUnfold() {
   car.kph10 = 300;
   run(6000);
   assert(takeTx(0x273).empty());
+}
+
+static void testMirrorDriverDoorUnfold() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.eeEnabled = true;
+  c.eeMirrorFold = true;
+  setCfg(c);
+  run(2000);
+  // Easy Entry fold, driver door closes: unfold 2 s later, still in P.
+  car.latch[BC_DOOR_FL] = 1;
+  run(400);
+  auto m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT);
+  assert(bcState.mirrorFoldedByEntry);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_FOLDED;
+  g_tx.clear();
+  run(3000);
+  assert(takeTx(0x273).empty());  // door still open: stays folded
+  car.latch[BC_DOOR_FL] = 2;
+  run(1800);
+  assert(takeTx(0x273).empty() && bcState.mirrorUnfoldPending);
+  run(800);
+  m = takeTx(0x273);
+  assert(m.size() == BC_ONE_SHOT_FRAMES && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_PRESENT);
+  assert(!bcState.mirrorFoldedByUs && !bcState.mirrorFoldedByEntry && bcState.mirrorDoorUnfolds == 1);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_UNFOLDED;
+  g_tx.clear();
+  run(3000);
+  assert(takeTx(0x273).empty());
+
+  // Driver door reopened within 2 s cancels; the next close re-arms it.
+  resetAll();
+  setCfg(c);
+  run(2000);
+  car.latch[BC_DOOR_FL] = 1;
+  run(400);
+  m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_FOLDED;
+  g_tx.clear();
+  car.latch[BC_DOOR_FL] = 2;
+  run(1000);
+  car.latch[BC_DOOR_FL] = 1;
+  run(3000);
+  assert(takeTx(0x273).empty() && !bcState.mirrorUnfoldPending && bcState.mirrorFoldedByUs);
+  g_tx.clear();
+  car.latch[BC_DOOR_FL] = 2;
+  run(2400);
+  m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_PRESENT);
+
+  // A fold from the macro / dashboard action is not unfolded by the driver door.
+  resetAll();
+  c.eeEnabled = false;
+  setCfg(c);
+  run(2000);
+  assert(bcRunActionLocked(g_now, BC_ACTION_MIRROR_FOLD_NOW) == nullptr);
+  run(400);
+  m = takeTx(0x273);
+  assert(!m.empty() && bcGetBitsPure(m[0].data, 24, 2) == BC_MIRROR_REQ_RETRACT);
+  assert(bcState.mirrorFoldedByUs && !bcState.mirrorFoldedByEntry);
+  car.mirror[0] = car.mirror[1] = BC_MIRROR_FOLDED;
+  g_tx.clear();
+  car.latch[BC_DOOR_FL] = 1;
+  run(1000);
+  car.latch[BC_DOOR_FL] = 2;
+  run(4000);
+  assert(takeTx(0x273).empty() && bcState.mirrorFoldedByUs && bcState.mirrorDoorUnfolds == 0);
 }
 
 static void testSeatbelt() {
@@ -1158,6 +1228,7 @@ int main() {
   testEasyEntryOpenAndRestore();
   testEasyEntryBlocked();
   testMirrorFoldCameraUnfold();
+  testMirrorDriverDoorUnfold();
   testSeatbelt();
   testReverseHazardAndLight();
   testDoorHazard();
