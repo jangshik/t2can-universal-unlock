@@ -60,6 +60,17 @@ https://discord.gg/euPbYG8Npc
  - And a lot more check [Changelog](https://github.com/06066060606060/t2can-universal-unlock/blob/main/CHANGELOG.md)
 
 
+## 🤖 automation — 2026-11-24 자동화 1단계
+
+> Body CAN 신호로 **WHEN → IF(AND/OR) → THEN** 규칙을 만듭니다(규칙 16개, 조건 4개, 동작 3개, 플래그 8개). 기준 차량과 송신 경로는 아래 add_feats(Body Comfort)와 같고, 핸들 매크로와는 별개입니다. 대시보드: **Settings → Automation**. 자세한 내용: [AUTOMATION.md](AUTOMATION.md), 미리보기: [`docs/automation-preview.html`](docs/automation-preview.html). **호스트 시뮬레이션 테스트만 통과했고 실차 검증은 하지 않았습니다.**
+
+- 트리거: 상태가 참이 될 때(N초 유지) / 값이 A→B로 바뀔 때. 조건은 AND·OR(AND 우선), 신호가 없으면 거짓.
+- 신호: 기어, 속도, 페달, 브레이크, 문 4개, 앞문 핸들, 잠금, 창문 4개, 비/눈, 미러, 카메라, 비상등, 라이트 스위치, 2열 벨트, 기능 20개 상태, 플래그 8개.
+- 동작: 비상등 N초, 미러 접기/펴기, 창문(선택) 벤트/닫기/열기, 카메라, 프렁크, 후방 안개등 N초, 기능 켜기/끄기/전환(기존 기능 포함), 페달 모드, 플래그, 대기.
+- **D에서 실행하지 않는 동작**: 미러 접기, 후방 안개등 켜기, 프렁크 열기(기어 정보가 없을 때도 차단). `automation_pure.h`의 `AUTO_DRIVE_BLOCKLIST`에 추가하면 늘어납니다.
+- 안전: 전체 스위치, 규칙별 테스트 모드(새 규칙 기본), 재실행 대기, 분당 동작 30개 제한, listen-only 존중, 기존 CAN TX 배리어.
+- 수정 비트는 Body Comfort와 같습니다(0x294 창문, 0x273 미러·프렁크·`UI_rearFogSwitch` 23, 0x3C2 비상등·카메라 버튼, 0x334 페달 모드). 새로 읽는 비트: 0x3A1 mux0 36/38/40\|2(2열 벨트, 체크섬 확인 후 저장), 0x3B3 `UI_lightSwitch` 9\|3.
+
 ## 🧩 add_feats — 2026-11-21 추가 기능 (Body Comfort + Wi-Fi Timing + Kickdown + Door Handle + Listen-Only)
 
 > 기준 차량: **HW4 Model Y Juniper · Body + Chassis** (Body CAN = CAN A / MCP2515). Model Y L(Party + VH)은 같은 VEH 프레임이 CAN B(VH)에 있어 동일하게 동작합니다. Party + Chassis, Model S는 미지원입니다. 다른 Body + Chassis 프로필(Highland, Legacy 3/Y)은 프레임 레이아웃이 검증되지 않아 "실험적"으로 표시됩니다.
@@ -246,7 +257,7 @@ https://discord.gg/euPbYG8Npc
 - `body_comfort_pure.h`(로직), `body_comfort_runtime.h`(버스 연결, 송신, 서비스 태스크 `bodyCmf`, NVS, HTTP).
 - `can_runtime.h`(CAN A/B 수신 훅), `can_core.h`(TX trace 소스), `web_api.h`(라우트, Wi-Fi 타이밍, 설정 초기화), `.ino`(설정 로드, 태스크 시작).
 - 대시보드: `dashboard_source.html`, `zh-CN/…`, `index_html.h`. 생성 도구는 `tools/add_body_comfort_dashboard.py`, `tools/build_body_comfort_preview.py`.
-- 테스트: `tests/test_body_comfort_pure.cpp`, `tests/test_body_comfort_runtime_host.cpp`, `tests/test_wifi_ap_timing_host.py`, `tests/test_dashboard_body_comfort.js`.
+- 테스트: `tests/test_body_comfort_pure.cpp`, `tests/test_body_comfort_runtime_host.cpp`(공용 하네스 `tests/body_comfort_host_harness.h`, 빌드 시 `-Itests`), `tests/test_wifi_ap_timing_host.py`, `tests/test_dashboard_body_comfort.js`.
 
 ### 실차 확인이 필요한 가정
 

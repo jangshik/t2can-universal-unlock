@@ -37,6 +37,7 @@
 #error "USB CAN logger requires Hardware CDC and JTAG with CDC on boot"
 #endif
 #include "index_html.h"
+#include "automation_ui_js.h"
 #include "lab_fonts.h"
 #include "dashboard_icon.h"
 #include "vehicle_profile.h"
@@ -81,6 +82,7 @@
 #include "continuous_ap_runtime.h"
 #include "preheat_runtime.h"
 #include "body_comfort_runtime.h"
+#include "automation_runtime.h"
 #include "web_api.h"
 #include "can_runtime.h"
 #include "can_usb_logger_task.h"
@@ -214,6 +216,7 @@ void setup() {
   s3xyAutoLoadConfig();
   preheatMenuLoad();
   bodyComfortCfgLoad();
+  automationLoad();
   nvsSchemaFinalize();
   canBusOffPersistenceLoad();
   if (labMenuEnabled) {

@@ -1,4 +1,5 @@
 # T2CAN Universal v3.30.3
+- automation: Automation phase 1. WHEN / IF (AND / OR) / THEN rules on Body CAN signals (16 rules, 4 conditions, 3 actions, 8 flags), dashboard Settings → Automation loaded on demand as /automation.js. Mirror fold, rear fog on and frunk open never run in D or without a fresh gear. Rules start in test mode; master switch, cooldown, 30 actions / min limit, listen-only respected. See AUTOMATION.md.
 - Restore TLSSC for Model YL
 - Added Chinese Language variant
 - add_feats: Body Comfort for HW4 Model Y Juniper (also Model Y L), every feature OFF by default and individually switchable: Easy Entry (window drop in P, restore on close, rain/snow block, optional mirror fold with camera view and speed-gated unfold), per-seat 2nd-row seat-belt chime suppression, steering-wheel double/triple/long-press macros, hazard N-blink, reverse hazards, reverse rear light, D/R door-open hazards. See BODY_COMFORT.md.

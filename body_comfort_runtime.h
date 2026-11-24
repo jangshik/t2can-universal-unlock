@@ -23,6 +23,10 @@
 
 #include "body_comfort_pure.h"
 
+// Defined in automation_runtime.h (included right after this file); runs at the
+// end of every Body Comfort service tick.
+static void automationServiceTick(uint32_t now);
+
 enum BodyComfortBusRuntime : uint8_t { BC_BUS_NONE = 0, BC_BUS_A = 1, BC_BUS_B = 2 };
 
 static inline uint8_t bodyComfortActiveBus() {
@@ -113,6 +117,7 @@ struct BcStateRuntime {
   bool brakeOn; uint32_t brakeMs; bool brakeValid;
   bool handlePulled[2];             // 0 driver (0x102), 1 passenger (0x103)
   BcLockFramePure lock; uint32_t lockMs; bool lockValid;
+  uint8_t belt2[3]; uint32_t beltMs; bool beltValid;  // 0x3A1 mux0 2nd-row status (1 = unbuckled)
   uint32_t handleBlockedLocked, handleBlockedClosed;
   bool handleBlockNoted[2];
 
@@ -178,6 +183,12 @@ struct BcStateRuntime {
   BcDoorHazardPure doorHazard;
   bool doorHazardWanted;
   bool rearLightActive;
+  // Rear fog held on by an automation action (separate from reverse light).
+  bool autoFogActive;
+  uint32_t autoFogUntilMs;
+  uint32_t autoFogStarts;
+  uint8_t blinkSeconds;     // duration of the running hazard blink
+  bool blinkFromAuto;       // started by automation: not tied to hzBlinkEnabled
 
   // Macros.
   BcGesturePure gesture[BC_BTN_COUNT];
@@ -360,6 +371,12 @@ static void bodyComfortObserveSwitch(uint8_t bus, const uint8_t *d, uint8_t dlc,
   if (send) bodyComfortTransmit(bus, BC_ID_VCLEFT_SWITCH, out, 8);
 }
 
+// Rear fog override: reverse rear light (fog modes) or an automation action.
+static bool bcFogWantedLocked() {
+  return (bcState.rearLightActive && bcCfg.rvLightMode != BC_REAR_LIGHT_LIGHTS_ON) ||
+         bcState.autoFogActive;
+}
+
 static void bodyComfortObserveVehicleControl(uint8_t bus, const uint8_t *d, uint8_t dlc, uint32_t now) {
   if (dlc < 8u) return;
   uint8_t out[8];
@@ -382,7 +399,7 @@ static void bodyComfortObserveVehicleControl(uint8_t bus, const uint8_t *d, uint
     fr.framesLeft--;
     send = true;
   }
-  if (bcState.rearLightActive && bcCfg.rvLightMode != BC_REAR_LIGHT_LIGHTS_ON &&
+  if (bcFogWantedLocked() &&
       bcGetBitsPure(d, 23, 1) == 0u) {
     bcSetRearFogPure(out, true);
     send = true;
@@ -426,9 +443,9 @@ static void bodyComfortObserveVehicleControl2(uint8_t bus, const uint8_t *d, uin
 static void bcRearLightReinforceLocked(uint32_t now, uint8_t fog[8], bool &fogOut,
                                        uint8_t light[8], bool &lightOut) {
   fogOut = lightOut = false;
-  if (!bcState.rearLightActive) return;
-  const bool wantFog = bcCfg.rvLightMode != BC_REAR_LIGHT_LIGHTS_ON;
-  const bool wantLight = bcCfg.rvLightMode != BC_REAR_LIGHT_FOG;
+  const bool wantFog = bcFogWantedLocked();
+  const bool wantLight = bcState.rearLightActive && bcCfg.rvLightMode != BC_REAR_LIGHT_FOG;
+  if (!wantFog && !wantLight) return;
   if (wantFog && bcState.vc273Valid &&
       (uint32_t)(now - bcState.vc273Ms) <= BC_OVERRIDE_TEMPLATE_MAX_AGE_MS &&
       (uint32_t)(now - bcState.fogLastTxMs) >= BC_OVERRIDE_REINFORCE_MS &&
@@ -484,8 +501,15 @@ static void bodyComfortObserveVehicleControl3(uint8_t bus, const uint8_t *d, uin
   if (send) bodyComfortTransmit(bus, BC_ID_UI_VEHICLE_CONTROL3, out, 8);
 }
 
-static void bodyComfortObserveVehicleStatus(uint8_t bus, const uint8_t *d, uint8_t dlc) {
+static void bodyComfortObserveVehicleStatus(uint8_t bus, const uint8_t *d, uint8_t dlc, uint32_t now) {
+  const bool beltFrame = dlc >= 8u && bcGetBitsPure(d, 0, 1) == 0u &&
+                         teslaAdditiveChecksumPure(BC_ID_VCFRONT_VEHICLE_STATUS, d) == d[7];
   portENTER_CRITICAL(&bcMux);
+  if (beltFrame) {
+    for (uint8_t s = 0; s < 3u; ++s) bcState.belt2[s] = (uint8_t)bcGetBitsPure(d, (uint8_t)(36u + s * 2u), 2);
+    bcState.beltMs = now;
+    bcState.beltValid = true;
+  }
   const bool enabled = bcCfg.sbEnabled;
   const uint8_t mask = bcCfg.sbSeatMask;
   portEXIT_CRITICAL(&bcMux);
@@ -575,7 +599,7 @@ static void bodyComfortObserve(uint8_t bus, uint16_t id, const uint8_t *d, uint8
     case BC_ID_UI_VEHICLE_CONTROL: bodyComfortObserveVehicleControl(bus, d, dlc, now); break;
     case BC_ID_UI_VEHICLE_CONTROL2: bodyComfortObserveVehicleControl2(bus, d, dlc, now); break;
     case BC_ID_UI_VEHICLE_CONTROL3: bodyComfortObserveVehicleControl3(bus, d, dlc, now); break;
-    case BC_ID_VCFRONT_VEHICLE_STATUS: bodyComfortObserveVehicleStatus(bus, d, dlc); break;
+    case BC_ID_VCFRONT_VEHICLE_STATUS: bodyComfortObserveVehicleStatus(bus, d, dlc, now); break;
     default: break;
   }
 }
@@ -662,8 +686,8 @@ static void bcMirrorCommandLocked(uint32_t now, uint8_t request) {
 }
 
 // Returns a reason string when rejected, nullptr when started.
-static const char *bcStartHazardBlinkLocked(uint32_t now) {
-  if (!bcCfg.hzBlinkEnabled) return "hazard blink disabled";
+static const char *bcStartHazardBlinkForLocked(uint32_t now, uint8_t seconds, bool fromAuto) {
+  if (!fromAuto && !bcCfg.hzBlinkEnabled) return "hazard blink disabled";
   if (bcState.blinkActive) return "already running";
   if (!bcAgeFreshPure(now, bcState.lightingMs, bcState.lightingValid, BC_LIGHTING_FRESH_MS))
     return "lighting status unavailable";
@@ -672,7 +696,31 @@ static const char *bcStartHazardBlinkLocked(uint32_t now) {
   bcState.blinkStartMs = now;
   bcState.blinkOnSeen = false;
   bcState.blinkOnMs = 0;
+  bcState.blinkSeconds = seconds;
+  bcState.blinkFromAuto = fromAuto;
   bcState.blinkRuns++;
+  return nullptr;
+}
+
+static const char *bcStartHazardBlinkLocked(uint32_t now) {
+  return bcStartHazardBlinkForLocked(now, bcCfg.hzBlinkSeconds, false);
+}
+
+// Starts one window command (mask of windows, Easy Entry's request path).
+// "Open" honours the alternative open command setting.
+static const char *bcWindowCommandStartLocked(uint32_t now, uint8_t mask, uint8_t request) {
+  if (bcState.winCmd.active) return "window command busy";
+  uint8_t pct = 0;
+  if (request == BC_WINREQ_OPEN && bcCfg.eeOpenPercent) { request = BC_WINREQ_PERCENT; pct = 100u; }
+  bcState.winCmdMask = mask;
+  bcState.winCmdRequest = request;
+  bcState.winCmdPct = pct;
+  bcState.winCmdStockSent = 0;
+  bcState.winCmdSynthSent = 0;
+  bcState.winCmdStockSeen = false;
+  bcState.winCmd.active = true;
+  bcState.winCmd.framesLeft = BC_WINDOW_CMD_FRAMES;
+  bcState.winCmd.startMs = now;
   return nullptr;
 }
 
@@ -1104,6 +1152,10 @@ static void bcHazardServiceLocked(uint32_t now) {
 
   bcState.reverseHazardWanted = bcCfg.rvHazard && gearFresh && gear == BC_GEAR_R;
   bcState.rearLightActive = bcCfg.rvLight && gearFresh && gear == BC_GEAR_R;
+  // Automation rear fog: ends after its time, in D, or without a fresh gear.
+  if (bcState.autoFogActive &&
+      ((int32_t)(now - bcState.autoFogUntilMs) >= 0 || !gearFresh || gear == BC_GEAR_D))
+    bcState.autoFogActive = false;
 
   bool doorsValid = true, anyOpen = false;
   for (uint8_t i = 0; i < BC_DOOR_COUNT; ++i) {
@@ -1117,14 +1169,15 @@ static void bcHazardServiceLocked(uint32_t now) {
 
   // Hazard blink: N seconds counted from the moment the hazards are seen on.
   if (bcState.blinkActive) {
-    const uint32_t durationMs = (uint32_t)bcCfg.hzBlinkSeconds * 1000u;
+    const uint32_t durationMs = (uint32_t)bcState.blinkSeconds * 1000u;
     if (!bcState.blinkOnSeen && lightingFresh && bcState.hazardReq == BC_HAZARD_REQ_BUTTON) {
       bcState.blinkOnSeen = true;
       bcState.blinkOnMs = now;
     }
     const bool elapsed = bcState.blinkOnSeen && (uint32_t)(now - bcState.blinkOnMs) >= durationMs;
     const bool neverOn = (uint32_t)(now - bcState.blinkStartMs) > durationMs + 4000u;
-    if (elapsed || neverOn || !bcCfg.hzBlinkEnabled) bcState.blinkActive = false;
+    if (elapsed || neverOn || (!bcState.blinkFromAuto && !bcCfg.hzBlinkEnabled))
+      bcState.blinkActive = false;
   }
 
   const bool desired = bcState.reverseHazardWanted || bcState.doorHazardWanted || bcState.blinkActive;
@@ -1306,6 +1359,7 @@ static void bodyComfortServiceTick(uint32_t now) {
     bcCfgSaveFailures++;
     portEXIT_CRITICAL(&bcMux);
   }
+  automationServiceTick(now);
 }
 
 static void bodyComfortTask(void *) {
@@ -1744,20 +1798,7 @@ static void httpBodyComfortWindowTest() {
   portENTER_CRITICAL(&bcMux);
   uint8_t gear = BC_GEAR_INVALID;
   if (!bcGearFreshLocked(now, gear) || gear != BC_GEAR_P) reason = "window test only in P";
-  else if (bcState.winCmd.active) reason = "window command busy";
-  else {
-    uint8_t request = (uint8_t)req, pct = 0;
-    if (request == BC_WINREQ_OPEN && bcCfg.eeOpenPercent) { request = BC_WINREQ_PERCENT; pct = 100u; }
-    bcState.winCmdMask = (uint8_t)(1u << door);
-    bcState.winCmdRequest = request;
-    bcState.winCmdPct = pct;
-    bcState.winCmdStockSent = 0;
-    bcState.winCmdSynthSent = 0;
-    bcState.winCmdStockSeen = false;
-    bcState.winCmd.active = true;
-    bcState.winCmd.framesLeft = BC_WINDOW_CMD_FRAMES;
-    bcState.winCmd.startMs = now;
-  }
+  else reason = bcWindowCommandStartLocked(now, (uint8_t)(1u << door), (uint8_t)req);
   portEXIT_CRITICAL(&bcMux);
   if (reason) { bcSendError(409, reason); return; }
   server.send(200, "application/json", bodyComfortJson());

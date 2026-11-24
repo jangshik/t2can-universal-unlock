@@ -112,7 +112,7 @@
 
 ## 검증 범위 / 미검증 항목
 
-- 통과: `tests/test_body_comfort_pure.cpp`(디코더, 제스처, 비상등 소유권, 창문 복구 계획, 시트벨트 체크섬, 설정 blob), `tests/test_body_comfort_runtime_host.cpp`(실제 런타임 헤더를 스텁으로 컴파일 후 가상 Juniper Body CAN 트래픽으로 10개 시나리오), `tests/test_wifi_ap_timing_host.py`(실제 web_api.h Wi-Fi 섹션 컴파일), `tests/test_dashboard_body_comfort.js`(Playwright: 소스/임베디드/중국어 대시보드).
+- 통과: `tests/test_body_comfort_pure.cpp`(디코더, 제스처, 비상등 소유권, 창문 복구 계획, 시트벨트 체크섬, 설정 blob), `tests/test_body_comfort_runtime_host.cpp`(공용 하네스 `tests/body_comfort_host_harness.h`, `-Itests`로 빌드. 실제 런타임 헤더를 스텁으로 컴파일 후 가상 Juniper Body CAN 트래픽으로 10개 시나리오), `tests/test_wifi_ap_timing_host.py`(실제 web_api.h Wi-Fi 섹션 컴파일), `tests/test_dashboard_body_comfort.js`(Playwright: 소스/임베디드/중국어 대시보드).
 - ESP32-S3 컴파일/링크 통과 (Arduino CLI 1.5.1, ESP32 core 3.3.12, autowp-mcp2515 1.3.1, 16 MB flash, app3M_fat9M_16MB, **OPI PSRAM**, CDC on boot):
   - EN: 프로그램 1,612,435 / 3,145,728 B (51%). zh-CN: 1,616,083 B (51%). 원본 `7463e08` 같은 옵션: 1,579,659 B.
   - 임베디드 대시보드 gzip: EN 94.4 KB, zh-CN 98.0 KB (한도 100 KB). `--warnings all`에서 새 코드 경고 0건.

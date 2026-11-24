@@ -98,8 +98,7 @@ SIM_JS = r"""
 """
 
 
-def main() -> None:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "docs" / "body-comfort-preview.html"
+def build_html() -> str:
     html = (ROOT / "dashboard_source.html").read_text(encoding="utf-8")
     if 'id="panelBodyComfort"' not in html:
         raise SystemExit("dashboard_source.html has no Body Comfort panel; run tools/add_body_comfort_dashboard.py")
@@ -126,6 +125,20 @@ def main() -> None:
                         "<script id=\"bc-preview-base-mock\">\n" + base_mock + "</script>\n"
                         "<script id=\"bc-preview-body-mock\">\n" + body_mock + "</script>\n</head>", 1)
     html = html.replace("</body>", SIM_HTML + "<script id=\"bc-preview-sim\">" + SIM_JS + "</script>\n</body>", 1)
+    # Automation panel (when patched in): mock API plus the panel script inlined,
+    # so the dashboard loader finds window.AutoUi instead of fetching /automation.js.
+    if 'id="panelAutomation"' in html:
+        auto_mock = (ROOT / "tools" / "automation_preview_mock.js").read_text(encoding="utf-8")
+        auto_mock = auto_mock.replace("location.href)", "'http://t2can.local/')")
+        auto_ui = (ROOT / "dashboard_automation.js").read_text(encoding="utf-8")
+        html = html.replace("</head>", "<script id=\"auto-preview-mock\">\n" + auto_mock + "</script>\n</head>", 1)
+        html = html.replace("</body>", "<script id=\"auto-preview-ui\">\n" + auto_ui + "</script>\n</body>", 1)
+    return html
+
+
+def main() -> None:
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "docs" / "body-comfort-preview.html"
+    html = build_html()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(f"preview={out} bytes={out.stat().st_size}")

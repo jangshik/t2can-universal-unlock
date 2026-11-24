@@ -693,6 +693,7 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="listrow clickable modelSMenuHidden" data-panel="panelApDriveProfile" id="apDriveProfileSettingsRow"><div><div class="listkey">AP 加速 / 能量回收</div><div class="listdesc" id="apDriveProfileDesc">AP 期间使用 Chill 加速和所选能量回收设置。</div></div><span class="chev">›</span></div>
 <div class="listrow clickable" data-panel="panelBatteryPreheat" id="batteryPreheatSettingsRow"><div><div class="listkey">电池预热</div><div class="listdesc">预热电池并查看热状态。</div></div><span class="chev">›</span></div>
 <div class="listrow clickable" data-panel="panelBodyComfort" id="bodyComfortSettingsRow"><div><div class="listkey">车身舒适功能</div><div class="listdesc" id="bodyComfortDesc">便捷上车、双闪、后排安全带和方向盘宏。</div></div><div class="rowRight"><span class="value" id="bodyComfortRowState">—</span><span class="chev">›</span></div></div>
+<div class="listrow clickable" data-panel="panelAutomation" id="automationSettingsRow"><div><div class="listkey">自动化</div><div class="listdesc">基于车身 CAN 信号的 当 / 如果 / 则 规则。</div></div><div class="rowRight"><span class="value" id="automationRowState">—</span><span class="chev">›</span></div></div>
 <div class="listrow"><div><div class="listkey">S3XY</div><div class="listdesc" id="s3xyFeatureDesc">使用 S3XY 按键执行已分配的车辆操作。</div></div><label class="toggle"><input id="s3xyFeatureToggle" type="checkbox"/><span class="track"></span></label></div>
 </section>
 <div class="sectionhead"><div class="sectiontitle">实验功能</div></div>
@@ -981,6 +982,7 @@ body.t2-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="softNote">蓝牙总开关和全局自动连接设置会保留。要彻底移除控制器中的 BLE 配对数据库，必须先开启蓝牙。</div>
 </div></section>
 <section class="panel" id="panelBodyComfort"><div class="panelin"><div class="paneltop"><button aria-label="返回" class="backbtn"><svg aria-hidden="true" class="backIcon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">设置</div></div><div class="panelHero">车身舒适功能</div><div class="panelSub">适用于 HW4 Model Y Juniper 的车身功能。每项功能在启用前均保持关闭。指令是车身 CAN 上实时车辆帧的副本。</div><div id="bcBody"></div></div></section>
+<section class="panel" id="panelAutomation"><div class="panelin"><div class="paneltop"><button aria-label="返回" class="backbtn"><svg aria-hidden="true" class="backIcon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">设置</div></div><div class="panelHero">自动化</div><div class="panelSub">车辆唤醒时规则在 T2CAN 上运行。折叠后视镜、开启后雾灯和打开前备箱在 D 挡不会执行。</div><div id="autoBody"><div class="softNote">加载中…</div></div></div></section>
 <!-- Settings detail panels -->
 <section class="panel" id="panelContinuousAp"><div class="panelin"><div class="paneltop"><button aria-label="返回" class="backbtn"><svg aria-hidden="true" class="backIcon" viewbox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">设置</div></div><div class="panelHero">连续 AP（实验性）</div><div class="panelSub">车辆准备就绪后，在打灯变道后重新接入 AP。</div>
 <section class="card">
@@ -2074,7 +2076,7 @@ setInterval(()=>{
   if(preheatSaved&&preheatSaved.packSeen===true)renderPreheatBms(preheatSaved);
 },3000);
 
-const pollLast={preheat:0,body:0,wifiTiming:0,serviceMode:0,fsdLab:0,driverMonitoringRecovery:0,isaSuppressionRecovery:0,nag:0,blink:0,sum:0,sys:0,s3:0,ulc:0,autoLc:0,country:0,r79:0,humanLab:0,pedalMap:0,homeSnap:0,settingsSnap:0,heartbeat:0};
+const pollLast={preheat:0,body:0,auto:0,wifiTiming:0,serviceMode:0,fsdLab:0,driverMonitoringRecovery:0,isaSuppressionRecovery:0,nag:0,blink:0,sum:0,sys:0,s3:0,ulc:0,autoLc:0,country:0,r79:0,humanLab:0,pedalMap:0,homeSnap:0,settingsSnap:0,heartbeat:0};
 function activePanelId(){return document.querySelector('.panel.show')?.id||''}
 function pollDue(k,ms,fn,now,force=false){if(force||now-pollLast[k]>=ms){pollLast[k]=now;fn()}}
 function pollTick(force=false){
@@ -2092,6 +2094,7 @@ function pollTick(force=false){
     else if(p==='panelServiceModeSettings')pollDue('serviceMode',1500,fetchServiceMode,now,force);
     else if(p==='panelBatteryPreheat')pollDue('preheat',1500,fetchPreheat,now,force);
     else if(p==='panelBodyComfort')pollDue('body',1000,()=>window.fetchBodyComfort?.(),now,force);
+    else if(p==='panelAutomation')pollDue('auto',1500,()=>window.fetchAutomation?.(),now,force);
     else if(p==='panelFsdVisualisation')pollDue('fsdLab',1000,fetchFsdLab,now,force);
     else if(p==='panelContinuousAp')pollDue('continuousAp',800,fetchContinuousAp,now,force);
     else if(p==='panelVisionControl')pollDue('visionControl',800,fetchVisionControlLab,now,force);
@@ -2462,6 +2465,18 @@ const ws=$b('wifiSlowToggle');if(ws)ws.onchange=()=>saveWifi({slowStartEnabled:w
 const wh=$b('wifiHideToggle');if(wh)wh.onchange=()=>saveWifi({hideEnabled:wh.checked?1:0},wh);
 onClick('wifiTimingApply',()=>{const a=Number($b('wifiStartDelay')?.value),b=Number($b('wifiHideDelay')?.value);if(!Number.isInteger(a)||a<0||a>600||!Number.isInteger(b)||b<0||b>3600)return;saveWifi({slowStartEnabled:$b('wifiSlowToggle')?.checked?1:0,startDelayS:a,hideEnabled:$b('wifiHideToggle')?.checked?1:0,hideDelayS:b})});
 setTimeout(fetchBody,1500);
+})();</script>
+<script>(()=>{
+window.AUTO_LANG="zh-CN";
+const T={"rowKey":"自动化","rowDesc":"基于车身 CAN 信号的 当 / 如果 / 则 规则。","back":"返回","settings":"设置","title":"自动化","sub":"车辆唤醒时规则在 T2CAN 上运行。折叠后视镜、开启后雾灯和打开前备箱在 D 挡不会执行。","loading":"加载中…","failed":"无法加载自动化面板","on":"开","off":"关"};
+let loading=null,mounted=false;
+function load(){if(window.AutoUi)return Promise.resolve();if(loading)return loading;
+loading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='/automation.js';s.onload=()=>res();s.onerror=()=>{loading=null;s.remove();rej(new Error('/automation.js'))};document.head.appendChild(s)});return loading}
+window.autoRowUpdate=st=>{const v=document.getElementById('automationRowState');if(v&&st)v.textContent=(st.enabled?T.on:T.off)+' · '+((st.rules||[]).length)};
+window.fetchAutomation=async()=>{const el=document.getElementById('autoBody');if(!el)return;
+try{await load();if(!mounted){mounted=true;await window.AutoUi.mount(el)}else await window.AutoUi.refresh()}
+catch(e){mounted=false;el.innerHTML='<div class="softNote">'+T.failed+' · '+String(e.message||e).replace(/[<>&]/g,'')+'</div>'}};
+setTimeout(async()=>{try{const r=await fetch('/api/auto',{cache:'no-store'});if(r.ok)window.autoRowUpdate(await r.json())}catch(e){}},1800);
 })();</script>
 <script>(()=>{
   const q=id=>document.getElementById(id),sheet=q('selectSheet'),back=q('selectSheetBack'),list=q('selectSheetList');

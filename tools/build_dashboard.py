@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "dashboard_source.html"
 HEADER = ROOT / "index_html.h"
 MAX_EMBEDDED_GZIP_BYTES = 100_000
+# Automation panel script, served separately as /automation.js.
+AUTOMATION_SOURCE = ROOT / "dashboard_automation.js"
+AUTOMATION_HEADER = ROOT / "automation_ui_js.h"
+MAX_AUTOMATION_GZIP_BYTES = 30_000
 
 def minify_css(css: str) -> str:
     out = []
@@ -112,7 +116,38 @@ def render_header(payload: bytes, raw_len: int, minified_len: int) -> str:
     )
 
 
+def minify_js_lines(js: str) -> str:
+    """Drop blank lines, standalone // comment lines and indentation."""
+    out = []
+    for line in js.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        out.append(stripped)
+    return "\n".join(out) + "\n"
+
+
+def build_automation_ui() -> None:
+    if not AUTOMATION_SOURCE.exists():
+        return
+    js = AUTOMATION_SOURCE.read_text(encoding="utf-8")
+    raw = minify_js_lines(js).encode("utf-8")
+    payload = (zopfli_gzip.compress(raw) if zopfli_gzip is not None
+               else gzip.compress(raw, compresslevel=9, mtime=0))
+    if len(payload) >= MAX_AUTOMATION_GZIP_BYTES:
+        raise SystemExit(f"automation ui gzip={len(payload)} must stay below {MAX_AUTOMATION_GZIP_BYTES} bytes")
+    rows = ["  " + ", ".join(f"0x{b:02X}" for b in payload[i:i+16]) + "," for i in range(0, len(payload), 16)]
+    AUTOMATION_HEADER.write_text(
+        "#pragma once\n#include <Arduino.h>\n\n"
+        "// Generated from dashboard_automation.js by tools/build_dashboard.py. Do not edit.\n"
+        f"// Raw JS: {len(js.encode('utf-8'))} bytes | minified: {len(raw)} bytes | gzip: {len(payload)} bytes\n"
+        "static const uint8_t AUTOMATION_UI_JS_GZ[] PROGMEM = {\n" + "\n".join(rows) + "\n};\n"
+        f"static const size_t AUTOMATION_UI_JS_GZ_LEN = {len(payload)};\n", encoding="utf-8")
+    print(f"automation ui source={len(js.encode('utf-8'))} minified={len(raw)} gzip={len(payload)}")
+
+
 def main() -> None:
+    build_automation_ui()
     source = SOURCE.read_text(encoding="utf-8")
     embedded = minify_dashboard(source)
     embedded_bytes = embedded.encode("utf-8")

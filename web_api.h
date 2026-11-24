@@ -3416,7 +3416,7 @@ static bool resetFirmwareSettingsPreserveProfileAndBle() {
   // old migrations.
   static const char *const clearNamespaces[] = {
     "nag", "summon", "lab3f8", "ulc", "alc293lab", "countrylab", "r79lab", "r79", "lanegraph",
-    "researchcap", "features", "labv3fd", "preheat", "bodycmf"
+    "researchcap", "features", "labv3fd", "preheat", "bodycmf", "bcauto"
   };
   bool ok = true;
   for (const char *ns : clearNamespaces) {
@@ -3631,6 +3631,12 @@ static void httpRoot() {
   server.sendHeader("Content-Encoding", "gzip");
   server.sendHeader("Cache-Control", "no-store");
   server.send_P(200, "text/html", (const char*)INDEX_HTML_GZ, INDEX_HTML_GZ_LEN);
+}
+// Automation panel script, loaded on demand by the dashboard.
+static void httpAutomationUi() {
+  server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "no-cache");
+  server.send_P(200, "application/javascript", (const char*)AUTOMATION_UI_JS_GZ, AUTOMATION_UI_JS_GZ_LEN);
 }
 static void httpAppleTouchIcon() {
   server.sendHeader("Cache-Control", "no-cache");
@@ -6118,6 +6124,14 @@ static void webTask(void *arg) {
     server.on("/api/body/update", HTTP_POST, httpBodyComfortUpdate);
     server.on("/api/body/action", HTTP_POST, httpBodyComfortAction);
     server.on("/api/body/window-test", HTTP_POST, httpBodyComfortWindowTest);
+    server.on("/automation.js", HTTP_GET, httpAutomationUi);
+    server.on("/api/auto", HTTP_GET, httpAutomationGet);
+    server.on("/api/auto/catalog", HTTP_GET, httpAutomationCatalog);
+    server.on("/api/auto/rule", HTTP_POST, httpAutomationRule);
+    server.on("/api/auto/delete", HTTP_POST, httpAutomationDelete);
+    server.on("/api/auto/global", HTTP_POST, httpAutomationGlobal);
+    server.on("/api/auto/flag", HTTP_POST, httpAutomationFlag);
+    server.on("/api/auto/run", HTTP_POST, httpAutomationRun);
     server.on("/api/features/s3xy", HTTP_POST, httpFeatureS3xy);
     server.on("/api/das/stats", HTTP_GET, httpDasTelemetryStats);
     server.on("/api/r79/stats", HTTP_GET, httpR79Stats);
