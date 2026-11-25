@@ -2,9 +2,9 @@
 """Connection UI at 320/390/430dp in both themes, with accessible visible controls."""
 import struct,time,re
 from emulator_support import *
-guard();package='dev.t2can.unlock'
+guard();package='dev.t2can.unlock.universal'
 try:
-    adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/.MainActivity')
+    adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/dev.t2can.unlock.MainActivity')
     wait_label('Devices / connection settings')
     for width in (320,390,430):
         adb('shell','wm','density','160');adb('shell','wm','size',str(width)+'x800')

@@ -9,6 +9,7 @@ import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+APPLICATION_ID = "dev.t2can.unlock.universal"
 
 
 def first(pattern):
@@ -41,7 +42,9 @@ def build():
     run(tools / "aapt2", "compile", "--dir", ROOT / "res", "-o", resources)
     run(tools / "aapt2", "link", "-o", unsigned, "-I", android,
         "--manifest", ROOT / "AndroidManifest.xml", "--java", generated,
-        "--min-sdk-version", "26", "--target-sdk-version", "36", "-A", ROOT / "assets", resources)
+        "--min-sdk-version", "26", "--target-sdk-version", "36",
+        # Installable application ID; Java classes and R stay in the manifest's dev.t2can.unlock namespace.
+        "--rename-manifest-package", APPLICATION_ID, "-A", ROOT / "assets", resources)
     sources = sorted((ROOT / "src").rglob("*.java")) + sorted(generated.rglob("*.java"))
     run(jdk / "bin/javac", "-encoding", "UTF-8", "--release", "8",
         "-classpath", android, "-d", classes, *sources)

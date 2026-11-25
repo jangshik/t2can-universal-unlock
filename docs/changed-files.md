@@ -6,7 +6,8 @@
 - ConnectionPanel: device type selector in Add/Edit device; manual-connection text no longer names T2CAN.
 - URL policy, cleartext rules and same-origin request blocking are unchanged for both types (HTTP only at 192.168.4.1; external CDN resources stay blocked).
 - App name is now "Tesla Unlock Universal"; APK/source ZIP are named `Tesla-Unlock-Universal-1.2.2*`.
-- Signed with a new release key (alias `tesla-unlock`). It does not match the original 1.2.1 signature, so 1.2.2 cannot be installed over the original app: uninstall it first (saved device profiles are lost).
+- Application ID is now `dev.t2can.unlock.universal` (set by `aapt2 --rename-manifest-package` in tools/build.py; Java package and R namespace stay `dev.t2can.unlock`). Signed with a new release key (alias `tesla-unlock`). It installs alongside the original app rather than updating it; profiles saved in the original app are not carried over.
+- Emulator tests target the new application ID; the launch test registers its profile in 1.2.2 instead of updating from 1.1.0.
 - Version 1.2.2 / code 6.
 
 # 1.2.1 changes from 1.2.0

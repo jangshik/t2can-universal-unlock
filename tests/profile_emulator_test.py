@@ -2,9 +2,9 @@
 """Exercise actual Keystore persistence and the Android nearby-device permission UI."""
 import time,re
 from emulator_support import *
-guard();package='dev.t2can.unlock'
+guard();package='dev.t2can.unlock.universal'
 adb('shell','pm','clear',package) # Only this disposable emulator's test fixtures.
-adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/.MainActivity')
+adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/dev.t2can.unlock.MainActivity')
 wait_label('Devices / connection settings');tap('Connect')
 wait_label('Edit device')
 def field(index,value):
@@ -24,7 +24,7 @@ wait_label('T2CAN-QA')
 stored=adb('shell','cat','/data/user/0/'+package+'/shared_prefs/device_profiles.xml')
 assert 'encrypted_v1' in stored
 assert 'qa-pass-1234' not in stored and 'T2CAN-QA-NOT-AN-AP' not in stored and 'T2CAN-QA' not in stored
-adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/.MainActivity')
+adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/dev.t2can.unlock.MainActivity')
 wait_label('T2CAN-QA')
 print('Android Keystore encrypted profile save/restart/selection PASS',flush=True)
 tap('Connect');time.sleep(.6)
@@ -36,7 +36,7 @@ for label in ('Don’t allow',"Don't allow",'DENY'):
     except AssertionError:pass
 else:adb('shell','input','keyevent','KEYCODE_BACK')
 wait_label('Permission required')
-adb('shell','input','keyevent','KEYCODE_HOME');adb('shell','am','start','-n',package+'/.MainActivity')
+adb('shell','input','keyevent','KEYCODE_HOME');adb('shell','am','start','-n',package+'/dev.t2can.unlock.MainActivity')
 time.sleep(.6)
 assert not any('Allow Tesla Unlock' in n.get('text','') for n in nodes())
 print('Nearby permission denied/resume without repeat popup PASS',flush=True)

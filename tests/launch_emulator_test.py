@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Seed 1.1.0, update to 1.2.2 and verify automatic launch without touching Connect."""
+"""Register a profile in 1.2.2 and verify automatic launch without touching Connect."""
 import time,re
 from emulator_support import *
-guard();package='dev.t2can.unlock'
-def start(): adb('shell','am','start','-n',package+'/.MainActivity')
+guard();package='dev.t2can.unlock.universal'
+def start(): adb('shell','am','start','-n',package+'/dev.t2can.unlock.MainActivity')
 def restart(): adb('shell','am','force-stop',package);start()
 def text(): return [n.get('text','') for n in nodes()]
 def field(index,value):
@@ -13,20 +13,20 @@ def field(index,value):
     adb('shell','input','keyevent','KEYCODE_MOVE_END')
     adb('shell','input','keyevent',*(['KEYCODE_DEL']*80))
     adb('shell','input','text',value)
-# Only the disposable emulator's test fixture is replaced.
+# Only the disposable emulator's test fixture is replaced. 1.2.2 has a new application ID and
+# signing key, so there is no in-place update from the original 1.1.0/1.2.1 app to test.
 if package in adb('shell','pm','list','packages',package):adb('uninstall',package)
-baseline=ROOT.parents[2]/'releases/Tesla-Unlock-1.1.0/Tesla-Unlock-1.1.0.apk'
-adb('install',baseline);start();wait_label('Devices / connection settings')
+adb('install',ROOT/'artifacts/Tesla-Unlock-Universal-1.2.2.apk');start();wait_label('Devices / connection settings')
 tap('Connect');wait_label('Edit device')
 field(0,'Launch-QA');field(1,'T2CAN-QA-NOT-AN-AP')
 adb('shell','input','keyevent','KEYCODE_BACK')
 # OPEN is sufficient for a non-existent test AP and avoids storing any password.
 tap('Save');wait_label('Launch-QA')
-adb('install','-r',ROOT/'artifacts/Tesla-Unlock-Universal-1.2.2.apk');start()
+restart()
 wait_label('Permission required')
-assert 'Launch-QA' in text(),'Saved selected device must survive update'
+assert 'Launch-QA' in text(),'Saved selected device must survive restart'
 assert not any('Allow Tesla Unlock' in t for t in text()),'Do not auto-loop runtime permission dialogs'
-print('1.1.0 -> 1.2.2 update preserves encrypted selected profile; missing permission stays actionable PASS',flush=True)
+print('Fresh 1.2.2 install keeps encrypted selected profile across restart; missing permission stays actionable PASS',flush=True)
 adb('shell','pm','grant',package,'android.permission.NEARBY_WIFI_DEVICES')
 adb('shell','svc','wifi','disable');restart()
 wait_label('ERROR')
@@ -55,5 +55,5 @@ for _ in range(3):
     values=text()
     if any('application has cancelled' in t for t in values):tap('OK');break
     time.sleep(.5)
-assert 'dev.t2can.unlock' not in adb('logcat','-b','crash','-d')
+assert package not in adb('logcat','-b','crash','-d')
 print('Launch emulator regression PASS',flush=True)

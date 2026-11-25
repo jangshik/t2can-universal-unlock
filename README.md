@@ -14,11 +14,11 @@
 3. Allow installation from this source if Android asks.
 4. Install the app and open Dashboard.
 
-When updating from another Tesla Unlock Universal release, install over the existing app to keep your saved devices. Version 1.2.2 uses a new signing key, so the original Tesla Unlock 1.2.1 must be uninstalled first (its saved devices are not kept).
+When updating from another Tesla Unlock Universal release, install over the existing app to keep your saved devices. Version 1.2.2 has a new application ID and signing key, so it installs alongside the original Tesla Unlock instead of updating it; devices saved in the original app are not carried over.
 
 An Android app for connecting to a T2CAN device and opening its dashboard. It supports saved device profiles, app-scoped local Wi-Fi access, automatic connection on launch, and one immediate retry when Android reports that a connection request is unavailable.
 
-- Package: `dev.t2can.unlock`
+- Application ID: `dev.t2can.unlock.universal` (Java package / resource namespace: `dev.t2can.unlock`)
 - Version code: `6`
 - Minimum Android version: Android 8 (API 26)
 - Automatic Wi-Fi connection: Android 10 (API 29) or later

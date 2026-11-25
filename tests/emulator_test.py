@@ -105,5 +105,5 @@ time.sleep(1)
 assert command("document.documentElement.dataset.theme") == "light"
 print("System theme change without reloading page PASS", flush=True)
 crashes = adb("logcat", "-b", "crash", "-d")
-assert "dev.t2can.unlock" not in crashes, crashes
+assert "dev.t2can.unlock.universal" not in crashes, crashes
 print("Android 16 end-to-end QA PASS", flush=True)
