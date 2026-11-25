@@ -62,7 +62,7 @@ def build():
         raise SystemExit("Existing signing key/password required. Set T2CAN_SIGNING_KEY and T2CAN_SIGNING_PASSWORD_FILE; no replacement key is generated.")
     output = Path(os.environ.get("T2CAN_OUTPUT", ROOT / "artifacts"))
     output.mkdir(parents=True, exist_ok=True)
-    apk = output / "Tesla-Unlock-1.2.1.apk"
+    apk = output / "Tesla-Unlock-Universal-1.2.2.apk"
     run(jdk / "bin/java", "-jar", tools / "lib/apksigner.jar", "sign",
         "--ks", key, "--ks-key-alias", "tesla-unlock", "--ks-pass", "file:" + str(password_file),
         "--v4-signing-enabled", "false", "--out", apk, aligned)

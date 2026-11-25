@@ -53,7 +53,7 @@ final class ConnectionPanel {
     void wifi() { activity.startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)); }
     void manual() {
         new AlertDialog.Builder(activity).setTitle("Manual connection")
-            .setMessage("Connect to your T2CAN in Android Wi-Fi settings, then return and tap Check connection. Other apps use the system default internet route; cellular internet is not guaranteed in this mode.")
+            .setMessage("Connect to your device in Android Wi-Fi settings, then return and tap Check connection. Other apps use the system default internet route; cellular internet is not guaranteed in this mode.")
             .setPositiveButton("Check connection",(d,w)->actions.connect(false))
             .setNeutralButton("Wi-Fi settings",(d,w)->wifi()).setNegativeButton("Cancel",null).show();
     }
@@ -88,6 +88,11 @@ final class ConnectionPanel {
         LinearLayout form=new LinearLayout(activity);form.setOrientation(LinearLayout.VERTICAL);
         int pad=Math.round(20*activity.getResources().getDisplayMetrics().density);form.setPadding(pad,pad,pad,pad);
         EditText name=field(form,"Device name",old==null?"T2CAN":old.name,false);
+        TextView typeLabel=new TextView(activity);typeLabel.setText("Device type");form.addView(typeLabel);
+        Spinner type=new Spinner(activity);String[] typeIds={DeviceProfile.TYPE_T2CAN,DeviceProfile.TYPE_GENERIC};
+        type.setAdapter(new ArrayAdapter<String>(activity,android.R.layout.simple_spinner_dropdown_item,
+            new String[]{"T2CAN firmware","Generic device (other ESP32 web UI)"}));
+        type.setSelection(old!=null && old.generic()?1:0);form.addView(type);
         EditText ssid=field(form,"Exact Wi-Fi name (SSID)",old==null?"":old.ssid,false);
         TextView securityLabel=new TextView(activity);securityLabel.setText("Wi-Fi security");form.addView(securityLabel);
         Spinner security=new Spinner(activity);String[] types={"OPEN","WPA2","WPA3"};
@@ -95,7 +100,7 @@ final class ConnectionPanel {
         security.setSelection(old==null?1:java.util.Arrays.asList(types).indexOf(old.security));form.addView(security);
         EditText password=field(form,"Wi-Fi password",old==null?"":old.password,true);
         EditText url=field(form,"Dashboard address",old==null?UrlPolicy.HOME:old.url,false);
-        TextView hint=new TextView(activity);hint.setText("Use the exact settings of your device. HTTP is allowed only for 192.168.4.1; other private IPv4 addresses require HTTPS with a trusted certificate. Leave SSID blank only for manual mode.");form.addView(hint);
+        TextView hint=new TextView(activity);hint.setText("Use the exact settings of your device. HTTP is allowed only for 192.168.4.1; other private IPv4 addresses require HTTPS with a trusted certificate. Leave SSID blank only for manual mode. Generic devices are checked by any HTTP 2xx/3xx response at the dashboard address and open without T2CAN features (log export, dashboard back navigation). Pages that load scripts or styles from the internet will not load them.");form.addView(hint);
         TextView error=new TextView(activity);form.addView(error);
         ScrollView scroll=new ScrollView(activity);scroll.addView(form);
         AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(old==null?"Add device":"Edit device")
@@ -103,7 +108,7 @@ final class ConnectionPanel {
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String home=url.getText().toString().trim(); if(!home.endsWith("/")) home+="/";
             DeviceProfile profile=new DeviceProfile(old==null?UUID.randomUUID().toString():old.id,
-                name.getText().toString().trim(),ssid.getText().toString(),types[security.getSelectedItemPosition()],password.getText().toString(),home);
+                name.getText().toString().trim(),ssid.getText().toString(),types[security.getSelectedItemPosition()],password.getText().toString(),home,typeIds[type.getSelectedItemPosition()]);
             String problem=profile.validationError(!profile.ssid.isEmpty());
             if(problem!=null) { error.setText(problem);return; }
             try { actions.disconnect();profiles.save(profile);profiles.select(profile.id);actions.profileChanged();dialog.dismiss(); }

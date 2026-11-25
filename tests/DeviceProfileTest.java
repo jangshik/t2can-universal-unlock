@@ -18,6 +18,16 @@ public final class DeviceProfileTest {
         check(p("AP","WPA2","1234567é").validationError(true)!=null,"non ASCII passphrase rejected");
         check(p(String.join("",java.util.Collections.nCopies(11,"한")),"OPEN","").validationError(true)!=null,"UTF8 SSID bytes capped");
         check(p("AP\n","OPEN","").validationError(true)!=null,"control SSID rejected");
+        check(DeviceProfile.legacy().type.equals(DeviceProfile.TYPE_T2CAN),"legacy is T2CAN");
+        check(!p("AP","OPEN","").generic(),"six-arg profile defaults to T2CAN");
+        check(p("AP","OPEN","").healthPath().equals("/api/profile/status"),"T2CAN probes profile API");
+        DeviceProfile g=new DeviceProfile("2","ESP32","ESP32-AP","OPEN","",UrlPolicy.HOME,DeviceProfile.TYPE_GENERIC);
+        check(g.validationError(true)==null && g.generic(),"generic accepted");
+        check(g.healthPath().equals("/"),"generic probes root");
+        check(new DeviceProfile("3","X","AP","OPEN","",UrlPolicy.HOME,"OTHER").validationError(false)!=null,"unknown type rejected");
+        check(new DeviceProfile("3","X","AP","OPEN","",UrlPolicy.HOME,null).validationError(false)!=null,"null type rejected");
+        check(DeviceProfile.genericStatusOk(200) && DeviceProfile.genericStatusOk(302),"2xx/3xx accepted");
+        check(!DeviceProfile.genericStatusOk(404) && !DeviceProfile.genericStatusOk(500) && !DeviceProfile.genericStatusOk(-1),"errors rejected");
         System.out.println("DeviceProfileTest: "+checks+" checks PASS");
     }
 }

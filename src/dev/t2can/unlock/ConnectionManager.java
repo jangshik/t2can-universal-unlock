@@ -92,6 +92,7 @@ public final class ConnectionManager {
         HealthResult h = lastHealth;
         return "state=" + state + "\n" + detail + "\nstateTimeMs=" + stateTimestamp +
             "\nconnectionElapsedMs=" + (startedAt == 0 ? 0 : SystemClock.elapsedRealtime() - startedAt) +
+            "\nprofileType=" + (profile == null ? "none" : profile.type) +
             "\nboundNetwork=" + (bound == null ? "none" : bound.getNetworkHandle()) +
             "\nlocal=" + localRoute + "\nlink=" + linkState +
             "\nobservedDefault=" + defaultRoute +
@@ -217,7 +218,7 @@ public final class ConnectionManager {
     }
     private void probe(long id, Network n, int attempt, Runnable exhausted) {
         if (!session.accepts(id) || session.isReady() || lostNetworks.contains(n)) return;
-        final String home = profile.url;
+        final DeviceProfile target = profile;
         status("VERIFYING", "Checking the device response (attempt " + (attempt + 1) + "/3).");
         try {
             NetworkCapabilities caps = cm.getNetworkCapabilities(n);
@@ -227,7 +228,7 @@ public final class ConnectionManager {
         } catch (RuntimeException ignored) { }
         io.execute(() -> {
             if (!session.accepts(id)) return;
-            HealthResult result = health(id, n, home);
+            HealthResult result = health(id, n, target);
             main.post(() -> {
                 if (!session.accepts(id) || session.isReady() || lostNetworks.contains(n)) return;
                 lastHealth = result;
@@ -237,19 +238,23 @@ public final class ConnectionManager {
             });
         });
     }
-    private HealthResult health(long id, Network network, String home) {
+    private HealthResult health(long id, Network network, DeviceProfile target) {
         HttpURLConnection connection = null;
         final long start = SystemClock.elapsedRealtime();
         final long expires = start + 7000;
         int code = -1;
         try {
             if (!session.accepts(id)) return new HealthResult(false, code, "cancelled", start);
-            connection = (HttpURLConnection) network.openConnection(new URL(UrlPolicy.origin(home) + "/api/profile/status"));
+            connection = (HttpURLConnection) network.openConnection(new URL(UrlPolicy.origin(target.url) + target.healthPath()));
             activeHttp = connection;
             if (!session.accepts(id)) return new HealthResult(false, code, "cancelled", start);
             connection.setConnectTimeout(2500); connection.setReadTimeout(2500);
             connection.setInstanceFollowRedirects(false); connection.setUseCaches(false);
             code = connection.getResponseCode();
+            if (target.generic()) {
+                boolean ok = DeviceProfile.genericStatusOk(code);
+                return new HealthResult(ok, code, ok ? "ok" : "http_status", start);
+            }
             if (code != 200) return new HealthResult(false, code, "http_status", start);
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (InputStream in = connection.getInputStream()) {

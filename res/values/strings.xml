@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">Tesla Unlock</string>
-    <string name="header_title">TESLA UNLOCK</string>
+    <string name="app_name">Tesla Unlock Universal</string>
+    <string name="header_title">TESLA UNLOCK UNIVERSAL</string>
     <string name="status_disconnected">Disconnected</string>
     <string name="status_connecting">Connecting…</string>
     <string name="connection_label">T2CAN CONNECTION</string>
@@ -9,7 +9,7 @@
     <string name="connection_loading">Connected to T2CAN.\nOpening the dashboard…</string>
     <string name="open_wifi_settings">Open Wi-Fi Settings</string>
     <string name="retry_connection">Retry Connection</string>
-    <string name="endpoint_version">192.168.4.1 · App 1.2.1</string>
+    <string name="endpoint_version">192.168.4.1 · App 1.2.2</string>
     <string name="file_picker_unavailable">Cannot open the system file picker.</string>
     <string name="use_dashboard_download">Use the dashboard log download button to save this file.</string>
     <string name="connect_t2can_wifi">Connect to the T2CAN network in Wi-Fi settings.</string>

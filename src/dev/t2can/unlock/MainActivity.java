@@ -62,6 +62,8 @@ public final class MainActivity extends Activity {
     private ConnectionPanel panel;
     private DeviceProfile pendingPermission;
     private String dashboardHome = UrlPolicy.HOME;
+    /** Generic device pages get plain WebView behavior: no T2CAN bridge, port or JS hooks. */
+    private boolean dashboardGeneric;
     private String webResult = "not loaded";
     private Button devicesButton, menuButton;
     private boolean showingSettings;
@@ -313,7 +315,7 @@ public final class MainActivity extends Activity {
             getWindow().getDecorView().setSystemUiVisibility(isDark() ? 0
                     : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
-        if (loaded && web != null) web.evaluateJavascript("window.__tuNativeTheme?.(" + isDark() + ")", null);
+        if (loaded && web != null && !dashboardGeneric) web.evaluateJavascript("window.__tuNativeTheme?.(" + isDark() + ")", null);
     }
 
     private void configureWebView() {
@@ -346,6 +348,7 @@ public final class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view, String url) {
                 if (view != web || !loadStarted || !UrlPolicy.isDevice(url, dashboardHome)) return;
                 final int epoch = documentEpoch;
+                if (dashboardGeneric) { pageReady(); return; }
                 web.evaluateJavascript(bridge, ignored -> {
                     if (destroyed || view != web || epoch != documentEpoch || !loadStarted) return;
                     WebMessagePort[] ports = web.createWebMessageChannel();
@@ -353,20 +356,15 @@ public final class MainActivity extends Activity {
                     exporter = new FileExporter(MainActivity.this, ports[0]);
                     web.postWebMessage(new WebMessage("T2CAN_NATIVE_PORT", new WebMessagePort[]{ports[1]}),
                             Uri.parse(UrlPolicy.origin(dashboardHome)));
-                    main.removeCallbacks(loadTimeout);
-                    webResult = "main document loaded";
-                    loaded = true;
-                    dashboardLoadedOnce = true;
-                    loadStarted = false;
-                    connectionScreen.setVisibility(View.GONE);
-                    menuButton.setVisibility(View.VISIBLE);
-                    updateTheme();
+                    pageReady();
                 });
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (view == web && request.isForMainFrame()) pageFailed();
             }
             @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                // A generic device may answer a later navigation with its own error page; keep the session.
+                if (dashboardGeneric && dashboardLoadedOnce) return;
                 if (view == web && request.isForMainFrame()) pageFailed();
             }
         });
@@ -403,9 +401,20 @@ public final class MainActivity extends Activity {
                 toast(R.string.use_dashboard_download));
     }
 
+    private void pageReady() {
+        main.removeCallbacks(loadTimeout);
+        webResult = "main document loaded" + (dashboardGeneric ? " (generic device)" : "");
+        loaded = true;
+        dashboardLoadedOnce = true;
+        loadStarted = false;
+        connectionScreen.setVisibility(View.GONE);
+        menuButton.setVisibility(View.VISIBLE);
+        updateTheme();
+    }
+
     private void showConnectionMenu() {
         if(fileCallback!=null) { toast(R.string.file_transfer_busy);return; }
-        if(web==null) { panel.show();return; }
+        if(web==null || dashboardGeneric) { panel.show();return; }
         final WebView current=web;final int epoch=documentEpoch;
         current.evaluateJavascript("window.__tuNativeBusy ? window.__tuNativeBusy() : true", result->{
             if(destroyed || current!=web || epoch!=documentEpoch) return;
@@ -424,7 +433,7 @@ public final class MainActivity extends Activity {
     private void refreshProfile() {
         DeviceProfile p=profiles.selected();
         connectionLabel.setText(p.name);
-        connectionFooter.setText(p.url+" · App 1.2.1");
+        connectionFooter.setText(p.url+(p.generic()?" · Generic":"")+" · App 1.2.2");
         connectionMessage.setText(p.ssid.isEmpty()?"Register your device Wi-Fi in Devices, or use Manual connection.":"Ready to connect to "+p.ssid+".");
     }
 
@@ -470,6 +479,7 @@ public final class MainActivity extends Activity {
         if(destroyed) return;
         destroyDashboard();
         dashboardHome=profile.url;
+        dashboardGeneric=profile.generic();
         // Network health and verified process binding precede WebView construction.
         web=new WebView(this);
         FrameLayout.LayoutParams layout=new FrameLayout.LayoutParams(-1,-1);layout.bottomMargin=dp(40);
@@ -495,6 +505,12 @@ public final class MainActivity extends Activity {
 
     private void dashboardBack() {
         if (web == null || !loaded || connectionScreen.getVisibility() == View.VISIBLE) { finish(); return; }
+        if (dashboardGeneric) {
+            if (fileCallback != null) toast(R.string.file_transfer_busy);
+            else if (web.canGoBack()) web.goBack();
+            else finish();
+            return;
+        }
         web.evaluateJavascript("window.__tuNativeBack ? window.__tuNativeBack() : 'exit'", value -> {
             if ("\"busy\"".equals(value)) toast(R.string.file_transfer_busy);
             else if ("\"modal\"".equals(value)) toast(R.string.modal_open);

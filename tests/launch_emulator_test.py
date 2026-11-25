@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed 1.1.0, update to 1.2.1 and verify automatic launch without touching Connect."""
+"""Seed 1.1.0, update to 1.2.2 and verify automatic launch without touching Connect."""
 import time,re
 from emulator_support import *
 guard();package='dev.t2can.unlock'
@@ -22,11 +22,11 @@ field(0,'Launch-QA');field(1,'T2CAN-QA-NOT-AN-AP')
 adb('shell','input','keyevent','KEYCODE_BACK')
 # OPEN is sufficient for a non-existent test AP and avoids storing any password.
 tap('Save');wait_label('Launch-QA')
-adb('install','-r',ROOT/'artifacts/Tesla-Unlock-1.2.1.apk');start()
+adb('install','-r',ROOT/'artifacts/Tesla-Unlock-Universal-1.2.2.apk');start()
 wait_label('Permission required')
 assert 'Launch-QA' in text(),'Saved selected device must survive update'
 assert not any('Allow Tesla Unlock' in t for t in text()),'Do not auto-loop runtime permission dialogs'
-print('1.1.0 -> 1.2.1 update preserves encrypted selected profile; missing permission stays actionable PASS',flush=True)
+print('1.1.0 -> 1.2.2 update preserves encrypted selected profile; missing permission stays actionable PASS',flush=True)
 adb('shell','pm','grant',package,'android.permission.NEARBY_WIFI_DEVICES')
 adb('shell','svc','wifi','disable');restart()
 wait_label('ERROR')

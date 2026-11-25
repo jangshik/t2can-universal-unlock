@@ -1,11 +1,11 @@
-# Dashboard Android 1.2.1
+# Dashboard Android 1.2.2
 
 
 ## Download
 
-[**Download Android APK — v1.2.1**](https://github.com/OWNER/REPOSITORY/releases/download/android-v1.2.1/Tesla-Unlock-1.2.1.apk)
+[**Download Android APK — v1.2.2**](https://github.com/OWNER/REPOSITORY/releases/download/android-v1.2.2/Tesla-Unlock-Universal-1.2.2.apk)
 
-[Release notes, source code, and checksums](https://github.com/OWNER/REPOSITORY/releases/tag/android-v1.2.1)
+[Release notes, source code, and checksums](https://github.com/OWNER/REPOSITORY/releases/tag/android-v1.2.2)
 
 ### Installation
 
@@ -14,17 +14,17 @@
 3. Allow installation from this source if Android asks.
 4. Install the app and open Dashboard.
 
-When updating, install over the existing app to keep your saved devices.
+When updating from another Tesla Unlock Universal release, install over the existing app to keep your saved devices. Version 1.2.2 uses a new signing key, so the original Tesla Unlock 1.2.1 must be uninstalled first (its saved devices are not kept).
 
 An Android app for connecting to a T2CAN device and opening its dashboard. It supports saved device profiles, app-scoped local Wi-Fi access, automatic connection on launch, and one immediate retry when Android reports that a connection request is unavailable.
 
 - Package: `dev.t2can.unlock`
-- Version code: `5`
+- Version code: `6`
 - Minimum Android version: Android 8 (API 26)
 - Automatic Wi-Fi connection: Android 10 (API 29) or later
 - Target and compile SDK: 36
 
-The app checks the device's existing `/api/profile/status` response and verifies process routing before opening the dashboard. Other apps use Android's default internet route. Simultaneous cellular internet access requires physical-device verification; this app does not force other apps onto LTE or 5G.
+For T2CAN profiles the app checks the device's existing `/api/profile/status` response; profiles with the **Generic device** type (other ESP32 web UIs) only need any HTTP 2xx/3xx response at the dashboard address and open without T2CAN-specific features. In both cases the app verifies process routing before opening the dashboard. Other apps use Android's default internet route. Simultaneous cellular internet access requires physical-device verification; this app does not force other apps onto LTE or 5G.
 
 ## Quick start
 
@@ -78,14 +78,14 @@ export T2CAN_BUILD_TOOLS=/absolute/path/to/android-sdk/build-tools/36.0.0
 export T2CAN_ANDROID_JAR=/absolute/path/to/android-sdk/platforms/android-36/android.jar
 export T2CAN_SIGNING_KEY=/absolute/path/to/existing/release.p12
 export T2CAN_SIGNING_PASSWORD_FILE=/absolute/path/to/existing/signing-password.txt
-export T2CAN_OUTPUT=/absolute/path/to/Tesla-Unlock/releases/Tesla-Unlock-1.2.1
+export T2CAN_OUTPUT=/absolute/path/to/Tesla-Unlock/releases/Tesla-Unlock-Universal-1.2.2
 python3 tools/build.py
 python3 tools/package_source.py
 ```
 
 Reuse the existing signing key to install an update over an earlier release. The build stops if the key is missing; it does not generate a replacement key. Private keys, passwords, toolchains, and intermediate build files are excluded from the source ZIP.
 
-Output names are `Tesla-Unlock-1.2.1.apk` and `Tesla-Unlock-1.2.1-source.zip`. Use the release directory's `SHA256SUMS.txt` to verify the distributed files.
+Output names are `Tesla-Unlock-Universal-1.2.2.apk` and `Tesla-Unlock-Universal-1.2.2-source.zip`. Use the release directory's `SHA256SUMS.txt` to verify the distributed files.
 
 ## Source layout
 

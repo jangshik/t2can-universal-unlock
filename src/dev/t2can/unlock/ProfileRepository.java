@@ -46,7 +46,8 @@ public final class ProfileRepository {
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = items.getJSONObject(i);
             DeviceProfile profile = new DeviceProfile(item.getString("id"), item.getString("name"), item.getString("ssid"),
-                    item.getString("security"), item.getString("password"), item.getString("url"));
+                    item.getString("security"), item.getString("password"), item.getString("url"),
+                    item.optString("type", DeviceProfile.TYPE_T2CAN)); // 1.2.1 and earlier have no type: T2CAN.
             if (profile.validationError(false) != null || find(profile.id) != null)
                 throw new IOException("Profile storage is invalid.");
             profiles.add(profile);
@@ -100,7 +101,8 @@ public final class ProfileRepository {
     private void persist(List<DeviceProfile> next, String selection) throws Exception {
         JSONArray items = new JSONArray();
         for (DeviceProfile profile : next) items.put(new JSONObject().put("id", profile.id).put("name", profile.name)
-                .put("ssid", profile.ssid).put("security", profile.security).put("password", profile.password).put("url", profile.url));
+                .put("ssid", profile.ssid).put("security", profile.security).put("password", profile.password).put("url", profile.url)
+                .put("type", profile.type));
         byte[] plain = new JSONObject().put("version", 1).put("selected", selection).put("profiles", items)
                 .toString().getBytes(StandardCharsets.UTF_8);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
