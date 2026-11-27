@@ -26,6 +26,7 @@
 // Defined in automation_runtime.h (included right after this file); runs at the
 // end of every Body Comfort service tick.
 static void automationServiceTick(uint32_t now);
+static void bcHazardPressObserveLocked(uint32_t now);
 
 enum BodyComfortBusRuntime : uint8_t { BC_BUS_NONE = 0, BC_BUS_A = 1, BC_BUS_B = 2 };
 
@@ -205,6 +206,16 @@ struct BcStateRuntime {
   uint32_t entryCancelledSwitch, winCmdTimeouts;
   uint32_t mirrorFolds, mirrorUnfolds, mirrorCmdTimeouts, cameraPresses;
   uint32_t hazardPresses, blinkRuns;
+  // Hazard button press: released as soon as VCFRONT_lighting shows the change,
+  // so the car sees one press. Trace of the last press for the dashboard.
+  uint8_t hazardPressStartReq; bool hazardPressStartValid;
+  uint32_t hazardPressEarlyRelease;
+  uint8_t indicatorRaw;
+  uint32_t hazTraceStartMs; bool hazTraceValid;
+  uint8_t hazTraceFrames;
+  int32_t hazTraceConfirmMs;   // -1 until the hazard request changed
+  uint8_t hazTraceCount, hazTraceLast;
+  uint16_t hazTraceMs[10]; uint8_t hazTraceVal[10];
   uint32_t seatbeltInjected, seatbeltBadChecksum;
   uint32_t rearLightInjected, rearLightReinforced, rearLightTxFail;
   uint8_t vc273Template[8]; uint32_t vc273Ms; bool vc273Valid;
@@ -341,6 +352,7 @@ static void bodyComfortObserveSwitch(uint8_t bus, const uint8_t *d, uint8_t dlc,
     if (p.active && (int32_t)(p.pressUntilMs - now) > 0 && !physical) {
       bcSetHazardButtonPure(out, true);
       p.framesSent++;
+      if (bcState.hazTraceFrames < 255u) bcState.hazTraceFrames++;
       send = true;
     }
     portEXIT_CRITICAL(&bcMux);
@@ -583,7 +595,9 @@ static void bodyComfortObserve(uint8_t bus, uint16_t id, const uint8_t *d, uint8
       if (!bcDecodeLightingPure(d, dlc, hazard, indicator)) break;
       portENTER_CRITICAL(&bcMux);
       bcState.hazardReq = hazard; bcState.indicatorOn = indicator;
+      bcState.indicatorRaw = (uint8_t)bcGetBitsPure(d, 0, 2);
       bcState.lightingMs = now; bcState.lightingValid = true;
+      bcHazardPressObserveLocked(now);
       portEXIT_CRITICAL(&bcMux);
       break;
     }
@@ -624,6 +638,28 @@ static bool bcWindowFreshLocked(uint32_t now, uint8_t door) {
          bcAgeFreshPure(now, bcState.winM1Ms[side], bcState.winM1Valid[side], BC_WINDOW_FRESH_MS);
 }
 
+// VCFRONT_lighting arrived: end our hazard press as soon as the hazard request
+// differs from what it was when the press started (the car took the press), and
+// record the lamp phases (indicatorLeftRequest) for 5 s after the press.
+static void bcHazardPressObserveLocked(uint32_t now) {
+  if (!bcState.hazTraceValid) return;
+  const uint32_t since = now - bcState.hazTraceStartMs;
+  if (since > 5000u) return;
+  BcPressRuntime &p = bcState.hazardPress;
+  const bool changed = bcState.hazardPressStartValid && bcState.hazardReq != bcState.hazardPressStartReq;
+  if (changed && bcState.hazTraceConfirmMs < 0) bcState.hazTraceConfirmMs = (int32_t)since;
+  if (changed && p.active && (int32_t)(p.pressUntilMs - now) > 0) {
+    p.pressUntilMs = now;
+    bcState.hazardPressEarlyRelease++;
+  }
+  if (bcState.indicatorRaw != bcState.hazTraceLast && bcState.hazTraceCount < 10u) {
+    bcState.hazTraceMs[bcState.hazTraceCount] = (uint16_t)since;
+    bcState.hazTraceVal[bcState.hazTraceCount] = bcState.indicatorRaw;
+    bcState.hazTraceCount++;
+  }
+  bcState.hazTraceLast = bcState.indicatorRaw;
+}
+
 static bool bcHazardPressStartLocked(uint32_t now) {
   BcPressRuntime &p = bcState.hazardPress;
   if (p.active && (int32_t)(p.busyUntilMs - now) > 0) return false;
@@ -631,6 +667,15 @@ static bool bcHazardPressStartLocked(uint32_t now) {
   p.pressUntilMs = now + BC_BUTTON_PRESS_MS;
   p.busyUntilMs = p.pressUntilMs + BC_BUTTON_RELEASE_MS;
   bcState.hazardPresses++;
+  bcState.hazardPressStartValid =
+      bcAgeFreshPure(now, bcState.lightingMs, bcState.lightingValid, BC_LIGHTING_FRESH_MS);
+  bcState.hazardPressStartReq = bcState.hazardReq;
+  bcState.hazTraceValid = true;
+  bcState.hazTraceStartMs = now;
+  bcState.hazTraceFrames = 0;
+  bcState.hazTraceConfirmMs = -1;
+  bcState.hazTraceCount = 0;
+  bcState.hazTraceLast = bcState.indicatorRaw;
   return true;
 }
 
@@ -1582,6 +1627,18 @@ static String bodyComfortJson() {
   jw.string("hazard", !lightingFresh ? "?" : s.hazardReq == 0u ? "OFF"
                       : s.hazardReq == BC_HAZARD_REQ_BUTTON ? "ON" : "OTHER");
   jw.boolean("hazardOwned", s.hazardCtl.ownedOn);
+  if (s.hazTraceValid) {
+    // "press 2 fr · req +120ms · lamp 2@130 1@830 ..." (lamp = indicatorLeftRequest 0 OFF 1 LOW 2 HIGH)
+    String t = "press ";
+    t += (unsigned)s.hazTraceFrames; t += " fr · req ";
+    if (s.hazTraceConfirmMs >= 0) { t += "+"; t += (long)s.hazTraceConfirmMs; t += "ms"; } else t += "unchanged";
+    t += " · lamp";
+    for (uint8_t i = 0; i < s.hazTraceCount; ++i) {
+      t += ' '; t += (unsigned)s.hazTraceVal[i]; t += '@'; t += (unsigned)s.hazTraceMs[i];
+    }
+    t += " · "; t += (unsigned long)((now - s.hazTraceStartMs) / 1000u); t += " s ago";
+    jw.string("hazardTrace", t);
+  }
   jw.boolean("blinkActive", s.blinkActive);
   jw.boolean("reverseHazard", s.reverseHazardWanted);
   jw.boolean("doorHazard", s.doorHazardWanted);
@@ -1618,6 +1675,7 @@ static String bodyComfortJson() {
   jw.u32("mirrorTimeouts", s.mirrorCmdTimeouts);
   jw.u32("cameraPresses", s.cameraPresses);
   jw.u32("hazardPresses", s.hazardPresses);
+  jw.u32("hazardPressEarlyRelease", s.hazardPressEarlyRelease);
   jw.u32("blinkRuns", s.blinkRuns);
   jw.u32("seatbeltInjected", s.seatbeltInjected);
   jw.u32("seatbeltBadChecksum", s.seatbeltBadChecksum);

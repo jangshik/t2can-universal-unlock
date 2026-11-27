@@ -443,6 +443,57 @@ static void testDoorHazard() {
   assert(!takeTx(0x3C2).empty());
 }
 
+// The hazard press ends as soon as VCFRONT_lighting shows the change, so the
+// car sees one press (stock un-pressed frames no longer interleave with it).
+static int hazardPressFrames() {
+  int n = 0;
+  for (const auto &t : g_tx)
+    if (t.id == 0x3C2 && bcSwitchMuxPure(t.data) == 0u && bcHazardButtonPressedPure(t.data)) n++;
+  return n;
+}
+
+static void testHazardPressReleasedOnConfirm() {
+  resetAll();
+  BodyComfortConfigPure c = bodyComfortDefaultsPure();
+  c.hzBlinkEnabled = true;
+  c.hzBlinkSeconds = 3;
+  setCfg(c);
+  run(500);
+  assert(bcStartHazardBlinkLocked(g_now) == nullptr);
+  // The simulated car turns its hazards on as soon as it sees the first press.
+  for (int i = 0; i < 100 && hazardPressFrames() == 0; ++i) run(10);
+  assert(hazardPressFrames() == 1);
+  car.hazard = BC_HAZARD_REQ_BUTTON;
+  car.indicator = true;
+  run(400);
+  assert(hazardPressFrames() == 1 && bcState.hazardPressEarlyRelease == 1);
+  assert(bcState.hazTraceConfirmMs >= 0 && bcState.hazTraceConfirmMs <= 200);
+  car.indicator = false; run(400);
+  car.indicator = true; run(400);
+  assert(bcState.hazTraceCount == 3);
+  server.args = {};
+  httpBodyComfortConfig();
+  assert(server.lastBody.find("\"hazardTrace\":\"press 1 fr · req +") != std::string::npos);
+  assert(server.lastBody.find(" · lamp 1@") != std::string::npos);
+  // Turning off: same, one frame.
+  run(2600);
+  assert(!bcState.blinkActive);
+  g_tx.clear();
+  for (int i = 0; i < 200 && hazardPressFrames() == 0; ++i) run(10);
+  assert(hazardPressFrames() == 1);
+  car.hazard = 0;
+  car.indicator = false;
+  run(400);
+  assert(hazardPressFrames() == 1 && bcState.hazardPressEarlyRelease == 2);
+  // A car that does not react keeps the full 300 ms press (unchanged behaviour).
+  resetAll();
+  setCfg(c);
+  run(500);
+  assert(bcStartHazardBlinkLocked(g_now) == nullptr);
+  run(600);
+  assert(hazardPressFrames() >= 3 && bcState.hazardPressEarlyRelease == 0);
+}
+
 static void testHazardBlinkAndMacros() {
   resetAll();
   BodyComfortConfigPure c = bodyComfortDefaultsPure();
@@ -981,6 +1032,7 @@ int main() {
   testReverseHazardAndLight();
   testDoorHazard();
   testHazardBlinkAndMacros();
+  testHazardPressReleasedOnConfirm();
   testHttp();
   testExistingFeatureMacros();
   testKickdown();

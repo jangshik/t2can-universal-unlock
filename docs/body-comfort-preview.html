@@ -2723,7 +2723,7 @@ function render(d){
   setText('bcStWx',l.weather||'—');setText('bcStDoors',l.doors||'—');setText('bcStWin',l.windows||'—');
   setText('bcStEe',l.easyEntry||'—');setText('bcStWcmd',l.windowCmd||'—');setText('bcStVc3',l.vc3||'—');setText('bcStWdiag',l.windowsDiag||'—');setText('bcStSeen',l.vc3Seen||'—');setChk('bcEop',c.eeOpenPercent);setText('bcStMir',(l.mirrors||'—')+(l.mirrorFoldedByFeature?(l.mirrorFoldedByEntry?' · EASY ENTRY':' · FEATURE'):'')+(l.mirrorDoorUnfoldPending?' · UNFOLD 2 s':'')+(l.mirrorCooldownLeftS>0?' · COOLDOWN '+l.mirrorCooldownLeftS+' s':''));
   setText('bcStCam',l.camera||'—');
-  setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':''));
+  setText('bcStHaz',(l.hazard||'?')+(l.hazardOwned?' · FEATURE':'')+(l.blinkActive?' · BLINK':'')+(l.reverseHazard?' · R':'')+(l.doorHazard?' · DOOR':'')+(l.rearLight?' · REAR LIGHT':'')+(l.hazardTrace?' · '+l.hazardTrace:''));
   setText('bcStMacro',s.macroEvents?`${T.btn[s.lastMacroButton]||'?'} · ${T.ges[s.lastMacroGesture]||'?'} → ${T.act[s.lastMacroAction]||T.notSet} · ${s.lastMacroResult||'—'}`:'—');
   setText('bcStCnt',`TX ${s.txOk||0}/${s.txFail||0} · EE ${s.entryOpens||0}/${s.entryRestores||0} · WX ${s.entryBlockedWeather||0} · BELT ${s.seatbeltInjected||0} · MACRO ${s.macroEvents||0}`);
   const n=[c.eeEnabled,c.sbEnabled,c.mcEnabled,c.hzBlinkEnabled,c.rvHazard,c.rvLight,c.drHazard].filter(Boolean).length;

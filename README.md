@@ -83,7 +83,7 @@ https://discord.gg/euPbYG8Npc
 - 송신 경로는 기존 CAN TX 복구 배리어(`canTxMcpSendTagged` / `canTxTwaiTransmitTagged`, TX trace 소스 `BODY_COMFORT`)를 그대로 거칩니다. USB 로거 listen-only, 프로필 설정 모드, CAN 유지보수 중에는 송신하지 않습니다.
 - 비트 표기는 DBC와 같은 **Intel(little-endian) start|length**입니다. 예) `24|2` = 24번 비트부터 2비트.
 - **원샷 명령**(창문, 미러): 순정 프레임 뒤에 수정 복사본을 **3프레임** 보냅니다. 2초 안에 1프레임 이상 보내면 성공으로, 하나도 못 보내면 타임아웃으로 처리합니다.
-- **버튼 누름**(비상등, 카메라): 300 ms 동안 들어오는 순정 프레임마다 버튼 비트를 켠 복사본을 보냅니다. 이후 200 ms는 다음 누름을 받지 않습니다. 기존 stalkless 방향지시 주입과 같은 형태이고, 운전자가 실제로 그 버튼을 누르고 있으면 주입하지 않습니다.
+- **버튼 누름**(비상등, 카메라): 300 ms 동안 들어오는 순정 프레임마다 버튼 비트를 켠 복사본을 보냅니다. 이후 200 ms는 다음 누름을 받지 않습니다. 기존 stalkless 방향지시 주입과 같은 형태이고, 운전자가 실제로 그 버튼을 누르고 있으면 주입하지 않습니다. **비상등(2026-11-27)**: 0x3F5 `hazardLightRequest`가 누르기 전 값에서 바뀐 것이 보이면 300 ms를 기다리지 않고 바로 뗍니다(누른 프레임과 순정의 '안 누름' 프레임이 번갈아 보여 차가 여러 번 누른 것으로 받는 것을 줄임). 대시보드 비상등 상태에 마지막 누름 기록(`press N fr · req +ms · lamp 값@ms …`, lamp = `indicatorLeftRequest` 0 OFF / 1 LOW / 2 HIGH)을 보여 줍니다.
 - **상태 덮어쓰기**(후미등, 벨트): 조건이 유지되는 동안 해당 순정 프레임이 들어올 때마다 수정 복사본을 보냅니다. 순정 값이 이미 원하는 값이면 보내지 않습니다.
 
 ### 수정(송신)하는 비트
@@ -96,7 +96,7 @@ https://discord.gg/euPbYG8Npc
 | 0x273 | UI_vehicleControl | 24\|2 | UI_mirrorFoldRequest | → 1 RETRACT(접기) / 2 PRESENT(펴기) | 1) 미러, 매크로 |
 | 0x273 | UI_vehicleControl | 23\|1 | UI_rearFogSwitch | 0 → 1 (R단 동안) | 6) 후진 후미등 (모드 FOG / BOTH) |
 | 0x3B3 | UI_vehicleControl2 | 9\|3 | UI_lightSwitch | AUTO/OFF/… → 1 ON (R단 동안) | 6) 후진 후미등 (모드 LIGHTS / BOTH) |
-| 0x3C2 | VCLEFT_switchStatus mux0 (bit0=0) | 3\|1 | VCLEFT_hazardButtonPressed | 0 → 1 (300 ms 누름) | 4) 5) 7) 비상등 토글 |
+| 0x3C2 | VCLEFT_switchStatus mux0 (bit0=0) | 3\|1 | VCLEFT_hazardButtonPressed | 0 → 1 (최대 300 ms, 0x3F5에서 바뀌면 즉시 뗌) | 4) 5) 7) 비상등 토글 |
 | 0x3C2 | VCLEFT_switchStatus mux1 (bit0=1) | 50\|2 | VCLEFT_swcCameraButtonState | 1 OFF → 2 ON (300 ms 누름) | 1) 접힘 중 카메라, 매크로 |
 | 0x3A1 | VCFRONT_vehicleStatus mux0 (bit0=0) | 36\|2 / 38\|2 / 40\|2 | VCFRONT_2RowLeft / Center / RightUnbuckled | 1 OCCUPIED_AND_UNBUCKLED → 0 NONE (선택한 좌석만) | 2) 2열 벨트 알람 |
 | 0x3A1 | VCFRONT_vehicleStatus | 52\|4, byte 7 | Counter, Checksum | 카운터는 그대로, 체크섬 재계산: `(0xA1 + 0x03 + byte0…byte6) & 0xFF` | 2) |

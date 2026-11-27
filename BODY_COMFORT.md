@@ -59,7 +59,7 @@
 
 ### 4) Hazard Blink (for N seconds, 기본 3초)
 - 일회성 명령: 매크로 또는 대시보드 "Blink Now"로 실행. 이미 비상등이 켜져 있으면 실행하지 않습니다.
-- 비상등 버튼 누름(0x3C2 mux0 `hazardButtonPressed`, 기존 stalkless 방향지시 주입과 같은 300 ms 누름 형태)으로 켜고, `VCFRONT_lighting` 0x3F5에서 켜진 것이 확인된 시점부터 N초 뒤 다시 눌러 끕니다.
+- 비상등 버튼 누름(0x3C2 mux0 `hazardButtonPressed`, 기존 stalkless 방향지시 주입과 같은 최대 300 ms 누름, 0x3F5에서 바뀐 것이 보이면 즉시 뗌)으로 켜고, `VCFRONT_lighting` 0x3F5에서 켜진 것이 확인된 시점부터 N초 뒤 다시 눌러 끕니다.
 - 스위치는 명령 허용/차단만 합니다(켠다고 비상등이 켜지지 않음).
 
 ### 5) 후진 시 비상깜빡이 ON / 7) D·R에서 문 열리면 비상깜빡이 ON

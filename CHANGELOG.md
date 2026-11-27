@@ -1,4 +1,5 @@
 # T2CAN Universal v3.30.3
+- Hazard button injection ends as soon as VCFRONT_lighting shows the hazard request changed (field report: first flash stretched). Dashboard hazard row shows the last press trace.
 - automation: Automation phase 1. WHEN / IF (AND / OR) / THEN rules on Body CAN signals (16 rules, 4 conditions, 3 actions, 8 flags), dashboard Settings → Automation loaded on demand as /automation.js. Mirror fold, rear fog on and frunk open never run in D or without a fresh gear. Rules start in test mode; master switch, cooldown, 30 actions / min limit, listen-only respected. See AUTOMATION.md.
 - Restore TLSSC for Model YL
 - Added Chinese Language variant
